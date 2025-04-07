@@ -1,12 +1,11 @@
-::: mermaid
 ---
 config:
   layout: elk
   look: handDrawn
-  theme: dark
+  theme: light
 ---
 flowchart TB
-  expr@{ shape: doc, label: "(2.0×pi × exp(-x×x)) / max(1.0 + sqrt(y), 0)" }
+  expr@{ shape: doc, label: "(2.0⋅pi ⋅ exp(-x⋅x)) / max(1.0 + sqrt(y), 0)" }
   var0@{ shape: cyl, label: "x" }
   var1@{ shape: cyl, label: "y" }
   S0{" \/ "}
@@ -40,4 +39,3 @@ flowchart TB
   S10-->S11
   S10-->S15
   S0-->S10
-:::

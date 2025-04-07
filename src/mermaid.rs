@@ -4,6 +4,8 @@ use std::fs::File;
 use std::io::Write;
 use crate::{AST, Token, TokenContext, TokenStream};
 
+const MARKDOWN_PREVIEW : bool = false;
+
 pub struct MermaidGraph {
     defined: HashMap<usize, String>,
     node_lines: Vec<String>,
@@ -24,9 +26,6 @@ impl MermaidGraph {
             variables: Vec::new()
         }
     }
-
-
-
 
     pub fn from_ast(ast: &Branch) -> Self {
         let mut graph = Self::new();
@@ -52,7 +51,10 @@ impl MermaidGraph {
 
     pub fn write_output(&self, path: &str) -> std::io::Result<()> {
         let mut output = File::create(path)?;
-        writeln!(output, "::: mermaid")?;
+        if MARKDOWN_PREVIEW { 
+            writeln!(output, "::: mermaid")?;
+        }
+        
         Self::write_header(&mut output)?;
 
         if let Some(expr) = &self.expression {
@@ -68,15 +70,19 @@ impl MermaidGraph {
         for l in &self.edge_lines {
             writeln!(output, "  {}", l)?;
         }
-        writeln!(output, ":::")?;
+
+        if MARKDOWN_PREVIEW {
+            writeln!(output, ":::")?;
+        }
         Ok(())
     }
 
     fn write_header(output: &mut File) -> std::io::Result<()> {
-        writeln!(output, "---\nconfig:")?;
+        writeln!(output, "---")?;
+        writeln!(output, "config:")?;        
         writeln!(output, "  layout: elk")?;
         writeln!(output, "  look: handDrawn")?;
-        writeln!(output, "  theme: dark")?;
+        writeln!(output, "  theme: light")?;
         writeln!(output, "---")?;
         writeln!(output, "flowchart TB")?;
         Ok(())
@@ -128,12 +134,12 @@ mod tests {
     use crate::*;
     
     #[test]
-    fn create_graph() {
+    fn create_graph1() {
         let input_var = &["x", "y"];
         let expr = "(2.0*pi * exp(-x*x)) / max(1.0 + sqrt(y), 0)";
         let graph = MermaidGraph::from_expr(expr.into(), input_var);
 
-        if let Err(e) = graph.write_output("./mermaid/mermaid_graph.md") {
+        if let Err(e) = graph.write_output("./mermaid/mermaid_graph1.mmd") {
             panic!("Cannot write graph: {}", e)
         };        
     }
