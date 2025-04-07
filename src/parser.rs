@@ -21,7 +21,7 @@ pub enum ParsingError {
 /// AST
 pub struct AST {
     ts: TokenStream,
-    tree: Option<Branch>
+    pub tree: Option<Branch>
 }
 
 impl AST {
@@ -102,7 +102,7 @@ impl AST {
 /// atom: number, constant or input variable
 /// Expression: an operation (head) and the operands (sub-branches)
 #[derive(Debug, PartialEq, Clone)]
-enum Branch {
+pub enum Branch {
     Atom(TokenContext),
     Expression(TokenContext, Vec<Branch>)
 }
@@ -111,13 +111,13 @@ impl Branch {
     /// Print the (sub)tree in reverse polish notation.
     pub fn as_rpn_str(&self) -> String {
         let mut s = String::new();
-        self.as_rpn_recursive(&mut s)
+        self.recurse_tree(&mut s)
     }
 
     /// Print expression with syntax highlighting
     // TODO: Currently only parens are colored
     pub fn print_rpn_colored(&self) -> () {
-        fn get_color(i: i32) -> Color {
+        fn get_paren_color(i: i32) -> Color {
             match i % 7 {
                 0 => {Color::Red},
                 1 => {Color::Green},
@@ -133,12 +133,12 @@ impl Branch {
         for c in s.chars() {
             match c {
                 '(' => {
-                    print!("{}", "(".color(get_color(i)));
+                    print!("{}", "(".color(get_paren_color(i)));
                     i += 1;
                 },
                 ')' => {
                     i -= 1;
-                    print!("{}", ")".color(get_color(i)));
+                    print!("{}", ")".color(get_paren_color(i)));
                 },
                 _ => {print!("{}", c)}
             }
@@ -146,13 +146,13 @@ impl Branch {
         print!("\r\n");
     }
 
-    fn as_rpn_recursive(&self, s: &mut String) -> String {
+    fn recurse_tree(&self, s: &mut String) -> String {
         match self {
             Self::Atom(tc) => write!(s, "{}", tc.token).unwrap(),
             Self::Expression(tc, children) => {
                 write!(s, "({}: ", tc.token).unwrap();
                 for branch in children {
-                    branch.as_rpn_recursive(s);
+                    branch.recurse_tree(s);
                     write!(s, ", ").unwrap();
                 }
                 s.pop(); s.pop();

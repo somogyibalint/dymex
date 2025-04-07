@@ -1,9 +1,21 @@
-
+use std::any::Any;
 use thiserror::Error;
+use crate::{float, Float};
 
-use std::f64 as float;
-type Float = f64;
-// https://stackoverflow.com/questions/61835421/macro-to-use-import-depending-on-type-alias
+
+mod number;
+// pub use number::*;
+
+
+// vec + number: self.iter().map(|a| a + other).collect()
+// number + vec: other.iter().map(|a| a + self).collect()
+// vec + vec: self.iter().zip(other.iter()).map(|(a, b)| a + b).collect()
+
+pub enum DynVar<T: DynMath> {
+    Number(Float),
+    Composite(T)
+}
+
 
 #[derive(Error, Debug)]
 pub enum EvaluationError {
@@ -35,8 +47,8 @@ pub enum EvaluationError {
     Unknown,
 }
 
-
-fn unimplemented_binary_err<L, R, U>(l: &L, r: &R, op: &str) -> Result<U, EvaluationError>
+/// Unimplemented binary operator
+fn unimpl_binary<L, R, U>(l: &L, r: &R, op: &str) -> Result<U, EvaluationError>
 where
     L: DynMath + ?Sized, 
     R: DynMath, 
@@ -49,7 +61,8 @@ where
     })
 }
 
-fn unimplemented_unary_number_err<L>(data: &L, op: &str) -> Result<Float, EvaluationError>
+/// Unimplemented unary function that returns a number (min, max, sum ...)
+fn unimpl_unary_number<L>(data: &L, op: &str) -> Result<Float, EvaluationError>
 where
     L: DynMath + ?Sized, 
 {
@@ -59,7 +72,8 @@ where
     })
 }
 
-fn unimplemented_unary_same_err<L>(data: &L, op: &str) -> Result<L, EvaluationError>
+/// Unimplemented unary function that returns Self (sin, sqrt, exp ...)
+fn unimpl_unary_self<L>(data: &L, op: &str) -> Result<L, EvaluationError>
 where
     L: DynMath + Sized, 
 {
@@ -69,7 +83,7 @@ where
     })
 }
 
-pub trait DynMath {
+pub trait DynMath : Any {
 
     fn type_name(&self) -> String;
 
@@ -86,7 +100,7 @@ pub trait DynMath {
         false
     }
 
-    fn number(&self) -> Result<Float, EvaluationError>;
+    fn number(&self) -> Float;
 
     fn get_field<R>(&self, field_name: &str) -> Result<R, EvaluationError> 
     where
@@ -103,7 +117,7 @@ pub trait DynMath {
         O: DynMath,
         R: DynMath
     {
-        unimplemented_binary_err(self, &other, "+")
+        unimpl_binary(self, &other, "+")
     }
 
     fn sub<O, R>(&self, other: O) -> Result<R, EvaluationError> 
@@ -111,7 +125,7 @@ pub trait DynMath {
         O: DynMath,
         R: DynMath
     {
-        unimplemented_binary_err(self, &other, "-")
+        unimpl_binary(self, &other, "-")
     }
 
     fn mul<O, R>(&self, other: O) -> Result<R, EvaluationError> 
@@ -119,7 +133,7 @@ pub trait DynMath {
         O: DynMath,
         R: DynMath
     {
-        unimplemented_binary_err(self, &other, "*")
+        unimpl_binary(self, &other, "*")
     }
 
     fn div<O, R>(&self, other: O) -> Result<R, EvaluationError> 
@@ -127,7 +141,7 @@ pub trait DynMath {
         O: DynMath,
         R: DynMath
     {
-        unimplemented_binary_err(self, &other, "/")
+        unimpl_binary(self, &other, "/")
     }
 
     #[allow(unused)]
@@ -144,105 +158,107 @@ pub trait DynMath {
 
     // unary operations: Self -> Float
     fn min(&self) -> Result<Float, EvaluationError> {
-        unimplemented_unary_number_err(self, "min()")
+        unimpl_unary_number(self, "min()")
     }
     fn max(&self) -> Result<Float, EvaluationError> {
-        unimplemented_unary_number_err(self, "max()")
+        unimpl_unary_number(self, "max()")
     }
     fn avg(&self) -> Result<Float, EvaluationError> {
-        unimplemented_unary_number_err(self, "avg()")
+        unimpl_unary_number(self, "avg()")
     }
     fn std(&self) -> Result<Float, EvaluationError> {
-        unimplemented_unary_number_err(self, "std()")
+        unimpl_unary_number(self, "std()")
     }
     fn sum(&self) -> Result<Float, EvaluationError> {
-        unimplemented_unary_number_err(self, "sum()")
+        unimpl_unary_number(self, "sum()")
     }
-
+    fn range(&self) -> Result<Float, EvaluationError> {
+        unimpl_unary_number(self, "range()")
+    }
     // unary operations: Self -> Self
 
     fn sin(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "sin()")
+        unimpl_unary_self(self, "sin()")
     }
 
     fn cos(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "cos()")
+        unimpl_unary_self(self, "cos()")
     }
 
     fn tan(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "tan()")
+        unimpl_unary_self(self, "tan()")
     }
 
     fn cotan(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "cotan()")
+        unimpl_unary_self(self, "cotan()")
     }
 
     fn exp(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "exp()")
+        unimpl_unary_self(self, "exp()")
     }
 
     fn log(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "log()")
+        unimpl_unary_self(self, "log()")
     }
 
     fn log2(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "log2()")
+        unimpl_unary_self(self, "log2()")
     }
 
     fn log10(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "log10()")
+        unimpl_unary_self(self, "log10()")
     }
 
     fn sqrt(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "sqrt()")
+        unimpl_unary_self(self, "sqrt()")
     }
 
     fn pow2(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "^2")
+        unimpl_unary_self(self, "^2")
     }
 
     fn pow3(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "^3")
+        unimpl_unary_self(self, "^3")
     }    
 
     fn pow4(&self) -> Result<Self, EvaluationError> 
     where 
         Self: Sized
     {
-        unimplemented_unary_same_err(self, "^4")
+        unimpl_unary_self(self, "^4")
     }
 
 }
@@ -259,17 +275,25 @@ fn all_scalars(args: &[impl DynMath]) -> bool
     args.iter().all(|e| e.is_scalar())
 }
 
+// fn unbox_numbers(args: &[impl DynMath], func: &str) -> Result<Vec::<Float>, EvaluationError> {
+//     let mut res = Vec::new();
+//     for v in args {
+//         if let Ok(n) = v.number() {
+//             res.push(n);
+//         } else {
+//             return Err(EvaluationError::InvalidArguments { 
+//                 function: func.into(), 
+//                 details: "every argument should be a number".into()
+//             })
+//         }
+//     }
+//     return Ok(res);
+// }
+
 fn unbox_numbers(args: &[impl DynMath], func: &str) -> Result<Vec::<Float>, EvaluationError> {
     let mut res = Vec::new();
     for v in args {
-        if let Ok(n) = v.number() {
-            res.push(n);
-        } else {
-            return Err(EvaluationError::InvalidArguments { 
-                function: func.into(), 
-                details: "every argument should be a number".into()
-            })
-        }
+        res.push(v.number())
     }
     return Ok(res);
 }
@@ -310,6 +334,30 @@ where
         }
     }
 }
+
+fn dynmath_range<T>(args: &[T]) -> Result<Float, EvaluationError> 
+where 
+    T: DynMath
+{
+    match args.len() {
+        0 => invalid_args_err("range", ZERO_ARGS_ERR), 
+        1 => match (args[0].max(), args[0].min()) {
+            (Err(e), _) => Err(e),
+            (_, Err(e)) => Err(e),
+            (Ok(_max), Ok(_min)) => Ok(_max - _min)
+        }
+        _ if !all_scalars(args) => invalid_args_err("range", MULTI_ARGS_ERR),
+        _ => match unbox_numbers(args, "range") {
+            Err(e) => Err(e),
+            Ok(v) => {
+                let _max = v.iter().fold(float::INFINITY, |a, &b| a.max(b));
+                let _min = v.iter().fold(float::INFINITY, |a, &b| a.min(b));
+                Ok(_max - _min)
+            }
+        }
+    }
+}
+
 
 fn dynmath_avg<T>(args: &[T]) -> Result<Float, EvaluationError> 
 where 

@@ -3,6 +3,7 @@
 ///  
 
 use std::fmt;
+use crate::Float;
 
 const MAX_FUNC_ARGS: usize = 64;
 
@@ -185,7 +186,7 @@ pub enum Token {
     Semicolon,
     Dot,
     Colon,
-    Number(f64),
+    Number(Float),
     Const(Constant),
     Var(String),
     Func(Function, usize),
@@ -387,7 +388,7 @@ fn parse_single_char_token(c: char) -> Option<Token> {
         '-' => Some(Token::ArOp(ArithmeticOperator::Minus)),
         '/' => Some(Token::ArOp(ArithmeticOperator::Div)),
         '^' => Some(Token::ArOp(ArithmeticOperator::Plus)),
-        '*' => Some(Token::ArOp(ArithmeticOperator::Mul)),
+        '*' | '×' | '⋅' => Some(Token::ArOp(ArithmeticOperator::Mul)),
         '=' => Some(Token::AssignOp(AssignmentOperator::Assign)),
         '>' => Some(Token::RelOp(RelationalOperator::Greater)),
         '<' => Some(Token::RelOp(RelationalOperator::Lesser)),
@@ -446,7 +447,7 @@ fn parse_number(s: &str) -> Option<(Token, usize)> {
             }
         }
     }
-    if let Ok(x) = str::parse::<f64>(numbrestring) {
+    if let Ok(x) = str::parse::<Float>(numbrestring) {
         Some((Token::Number(x), numbrestring.len()))
     } else {
         None

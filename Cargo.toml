@@ -10,3 +10,6 @@ thiserror = "2.0.12"
 [dev-dependencies]
 assert_matches = "1.5"
 
+[features]
+default = []
+single_precision = []
