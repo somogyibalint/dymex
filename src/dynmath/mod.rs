@@ -16,6 +16,24 @@ pub enum DynVar<T: DynMath> {
     Composite(T)
 }
 
+pub enum Category {
+    /// Floating point number
+    Number,
+    /// Indexable, iterable array type (such as Vec)
+    Array,
+    /// Unique type. Binary operations with different types are not supported
+    Unqiue,
+}
+impl Category {
+    fn to_str(&self) -> &'static str {
+        match *self {
+            Self::Number => "Number",
+            Self::Array  => "Array",
+            Self::Unqiue => "Unique"
+        }
+    }
+}
+
 
 #[derive(Error, Debug)]
 pub enum EvaluationError {
@@ -35,7 +53,7 @@ pub enum EvaluationError {
 
     #[error("`{type_name:?}` has no field named `{field:?}`")]
     InvalidField {
-        type_name: String,
+        type_name: &'static str,
         field: String,
     },
     #[error("invalid arguments for `{function:?}`: {details:?}")]
@@ -85,19 +103,23 @@ where
 
 pub trait DynMath : Any {
 
-    fn type_name(&self) -> String;
-
-    fn is_scalar(&self) -> bool;
+    fn category(&self) -> Category;
 
     fn shape(&self) -> &[usize];
 
     fn shape_matches(&self, other: impl DynMath) -> bool {
-        if self.is_scalar() 
-            || other.is_scalar() 
-            || self.shape() == other.shape() {
-                return true
-            }
-        false
+        match (self.category(), other.category()) {
+            (Category::Number, _) => true,
+            (_, Category::Number) => true,
+            (Category::Array, Category::Array) => {
+                self.shape() == other.shape() 
+            },
+            _ => false // maybe panic here?
+        }
+    }
+
+    fn type_name(&self) -> &'static str {
+        &self.category().to_str()
     }
 
     fn number(&self) -> Float;
@@ -174,6 +196,12 @@ pub trait DynMath : Any {
     }
     fn range(&self) -> Result<Float, EvaluationError> {
         unimpl_unary_number(self, "range()")
+    }
+    fn l2_norm(&self) -> Result<Float, EvaluationError> {
+        unimpl_unary_number(self, "l2_norm()")
+    }
+    fn l1_norm(&self) -> Result<Float, EvaluationError> {
+        unimpl_unary_number(self, "l1_norm()")
     }
     // unary operations: Self -> Self
 
@@ -272,7 +300,7 @@ fn invalid_args_err(func: &str, details: &str) -> Result<Float, EvaluationError>
 
 fn all_scalars(args: &[impl DynMath]) -> bool 
 {
-    args.iter().all(|e| e.is_scalar())
+    args.iter().all(|e| matches!(e.category(), Category::Number))
 }
 
 // fn unbox_numbers(args: &[impl DynMath], func: &str) -> Result<Vec::<Float>, EvaluationError> {
@@ -392,5 +420,41 @@ where
                 Ok((sq_err / (args.len() as Float)).sqrt())
             }
         }      
+    }
+}
+
+fn dynmath_l2<T>(args: &[T]) -> Result<Float, EvaluationError> 
+where 
+    T: DynMath
+{
+    match args.len() {
+        0 => invalid_args_err("l2_norm", ZERO_ARGS_ERR), 
+        1 => return args[0].l2_norm(),
+        _ if !all_scalars(args) => invalid_args_err("l2_norm", MULTI_ARGS_ERR),
+        _ => match unbox_numbers(args, "l2_norm") {
+            Err(e) => Err(e),
+            Ok(v) => {
+                let sq_sum = v.iter().map(|e| e*e).sum::<Float>();
+                Ok(sq_sum.sqrt())
+            }
+        }
+    }
+}
+
+fn dynmath_l1<T>(args: &[T]) -> Result<Float, EvaluationError> 
+where 
+    T: DynMath
+{
+    match args.len() {
+        0 => invalid_args_err("l1_norm", ZERO_ARGS_ERR), 
+        1 => return args[0].l1_norm(),
+        _ if !all_scalars(args) => invalid_args_err("l1_norm", MULTI_ARGS_ERR),
+        _ => match unbox_numbers(args, "l1_norm") {
+            Err(e) => Err(e),
+            Ok(v) => {
+                let sq_sum = v.iter().map(|e| e.abs()).sum::<Float>();
+                Ok(sq_sum)
+            }
+        }
     }
 }

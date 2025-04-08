@@ -1,13 +1,11 @@
 use std::ops::Add;
 use crate::{float, Float};
-use super::{DynMath, EvaluationError};
+use super::{DynMath, EvaluationError, Category};
 
 
 impl DynMath for Float {
 
-    fn type_name(&self) -> String { "Number".into() }
-
-    fn is_scalar(&self) -> bool { true }
+    fn category(&self) -> Category { Category::Number }
 
     fn shape(&self) -> &[usize] { &[] }
 
@@ -25,8 +23,5 @@ impl DynMath for Float {
     //     Ok(*self + other)
     // }
     
-
-   
-
 
 }
