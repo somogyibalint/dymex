@@ -1,6 +1,5 @@
-use std::ops::Add;
 use crate::{float, Float};
-use super::{DynMath, EvaluationError, Category};
+use super::{DynMath, EvaluationError, Category, unimpl_binary};
 
 
 impl DynMath for Float {
@@ -9,19 +8,56 @@ impl DynMath for Float {
 
     fn shape(&self) -> &[usize] { &[] }
 
-    // sclars match with anything
-    fn shape_matches(&self, _: impl DynMath) -> bool { true }
-
-    fn number(&self) -> Float {
+    fn as_number(&self) -> Float {
         *self
     }
 
 
+    fn add(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(*self + other.as_number())),
+            Category::Array => (*other).add(Box::new(*self)),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "+")             
+        }
+    }
 
-    // fn add(&self, other: Float) -> Result<Float, EvaluationError> 
-    // {
-    //     Ok(*self + other)
-    // }
+    fn sub(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(*self - other.as_number())),
+            Category::Array => (*other).sub_inv(Box::new(*self)),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "-")             
+        }
+    }
+
+    fn mul(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(*self * other.as_number())),
+            Category::Array => (*other).mul(Box::new(*self)),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "+")             
+        }
+    }
+
+    fn div(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(*self / other.as_number())),
+            Category::Array => (*other).div_inv(Box::new(*self)),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "+")             
+        }
+    }
+
+    fn pow(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            
+            Category::Number => Ok(Box::new(self.powf(other.as_number()))),
+            Category::Array => (*other).div_inv(Box::new(*self)),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "+")             
+        }
+    }
+
     
-
 }

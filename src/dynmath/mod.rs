@@ -1,15 +1,12 @@
 use std::any::Any;
+use std::slice::Iter;
 use thiserror::Error;
 use crate::{float, Float};
 
 
 mod number;
-// pub use number::*;
+mod vector;
 
-
-// vec + number: self.iter().map(|a| a + other).collect()
-// number + vec: other.iter().map(|a| a + self).collect()
-// vec + vec: self.iter().zip(other.iter()).map(|(a, b)| a + b).collect()
 
 pub enum DynVar<T: DynMath> {
     Number(Float),
@@ -34,11 +31,10 @@ impl Category {
     }
 }
 
+type Unary = fn(Float) -> Float;
 
 #[derive(Error, Debug)]
 pub enum EvaluationError {
-    #[error("the data for key `{0}` is not available")]
-    Redaction(String),
     #[error("operation `{operation:?}` not supported between `{lhs:?}` and `{rhs:?}`")]
     InvalidBinaryOperation {
         operation: String,
@@ -65,22 +61,18 @@ pub enum EvaluationError {
     Unknown,
 }
 
-/// Unimplemented binary operator
-fn unimpl_binary<L, R, U>(l: &L, r: &R, op: &str) -> Result<U, EvaluationError>
-where
-    L: DynMath + ?Sized, 
-    R: DynMath, 
-    U: DynMath
+/// Unimplemented binary operation `op` between `lhs` and `rhs`
+fn unimpl_binary(lhs: &str, rhs: &str, op: &str) -> Result<Box<dyn DynMath>, EvaluationError>
 {
     Err(EvaluationError::InvalidBinaryOperation { 
         operation: op.into(), 
-        lhs: l.type_name().into(), 
-        rhs: r.type_name().into() 
+        lhs: lhs.into(), 
+        rhs: rhs.into() 
     })
 }
 
 /// Unimplemented unary function that returns a number (min, max, sum ...)
-fn unimpl_unary_number<L>(data: &L, op: &str) -> Result<Float, EvaluationError>
+fn unimpl_unary<L>(data: &L, op: &str) -> Result<Float, EvaluationError>
 where
     L: DynMath + ?Sized, 
 {
@@ -90,16 +82,6 @@ where
     })
 }
 
-/// Unimplemented unary function that returns Self (sin, sqrt, exp ...)
-fn unimpl_unary_self<L>(data: &L, op: &str) -> Result<L, EvaluationError>
-where
-    L: DynMath + Sized, 
-{
-    Err(EvaluationError::InvalidUnaryOperation { 
-        operation: op.into(), 
-        operand: data.type_name().into(), 
-    })
-}
 
 pub trait DynMath : Any {
 
@@ -107,7 +89,7 @@ pub trait DynMath : Any {
 
     fn shape(&self) -> &[usize];
 
-    fn shape_matches(&self, other: impl DynMath) -> bool {
+    fn shape_matches(&self, other: Box<dyn DynMath>) -> bool {
         match (self.category(), other.category()) {
             (Category::Number, _) => true,
             (_, Category::Number) => true,
@@ -118,175 +100,179 @@ pub trait DynMath : Any {
         }
     }
 
+    /// Type name as str for runtime error information
     fn type_name(&self) -> &'static str {
         &self.category().to_str()
     }
 
-    fn number(&self) -> Float;
+    /// Interpret as float
+    // Here it's ok to panic, this should be only called after matching on self.category()
+    fn as_number(&self) -> Float {
+        panic!("Panic: `{}` is not a number.", self.type_name())
+    }
 
-    fn get_field<R>(&self, field_name: &str) -> Result<R, EvaluationError> 
-    where
-        R: DynMath
+    /// Return an iterator if possible
+    // Here it's ok to panic, this should be only called after matching on self.category()
+    fn iter(&self) -> Iter<'_, Float> {
+        panic!("Panic: trying to iterate non-iterable `{}`", self.type_name())
+    }
+
+    /// Apply provided function for self elementwise
+    // Here it's ok to panic, this should be only called after matching on self.category()
+    fn elementwise(&self, f: Unary) -> Result<Box<dyn DynMath>, EvaluationError> {
+        panic!("Panic: applying unary function to `{}` is not supported.", self.type_name())
+    }
+
+    /// Helper function for unary functions, selects the appropriate method for the evaluation of `f`
+    /// based on whether self is scalar, array or some other type
+    fn unary_dispatcher(&self, f: Unary, op: &str) -> Result<Box<dyn DynMath>, EvaluationError> {
+        match self.category() {
+            Category::Number => Ok(Box::new(f(self.as_number()))),
+            Category::Array => self.elementwise(f),
+            _ => Err(EvaluationError::InvalidUnaryOperation {
+                operation: op.into(),
+                operand: self.type_name().into(),
+            }),
+        }
+    }
+
+    /// Returns `field_name` field of self 
+    fn get_field(&self, field_name: &str) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
         Err(EvaluationError::InvalidField { type_name: self.type_name(), field: field_name.into() })
     }
 
+    //TODO: call method?
 
-    // binary operations: Self, Other -> Self || Other
+    // Binary operations: Self, Other -> Self || Other
 
-    fn add<O, R>(&self, other: O) -> Result<R, EvaluationError> 
-    where
-        O: DynMath,
-        R: DynMath
+    fn add(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        unimpl_binary(self, &other, "+")
+        unimpl_binary(self.type_name(), other.type_name(), "+")
+    }
+    
+    fn sub(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        unimpl_binary(self.type_name(), other.type_name(), "-")
     }
 
-    fn sub<O, R>(&self, other: O) -> Result<R, EvaluationError> 
-    where
-        O: DynMath,
-        R: DynMath
+    fn mul(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        unimpl_binary(self, &other, "-")
+        unimpl_binary(self.type_name(), other.type_name(), "*")
     }
 
-    fn mul<O, R>(&self, other: O) -> Result<R, EvaluationError> 
-    where
-        O: DynMath,
-        R: DynMath
+    fn div(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        unimpl_binary(self, &other, "*")
+        unimpl_binary(self.type_name(), &other.type_name(), "/")
     }
 
-    fn div<O, R>(&self, other: O) -> Result<R, EvaluationError> 
-    where
-        O: DynMath,
-        R: DynMath
+    fn pow(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        unimpl_binary(self, &other, "/")
+        unimpl_binary(self.type_name(), &other.type_name(), "**")
     }
 
-    #[allow(unused)]
-    fn pow<R>(&self, other: Float) -> Result<R, EvaluationError> 
-    where
-        R: DynMath
+    /// Helpers for non-commutative binary operators
+    /// Number + Array type would be tricky to implement, as it is not obvious how to 
+    /// reconstruct an Array from its iterator. Instead, we call Array + Number.
+    /// For the non-commutative binary operators of `-`, `/` and `^`, inverse methods
+    /// need to be defined. 
+    //TODO Instead of inverse, call it backwards, or righttoleft?  
+    fn sub_inv(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {        
+        other.sub(Box::new(self.as_number()))
+    }
+    fn div_inv(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        Err(EvaluationError::InvalidBinaryOperation { 
-            operation: "**".into(), 
-            lhs: self.type_name().into(), 
-            rhs: "Number".into() 
-        })
+        other.div(Box::new(self.as_number()))
+    }
+    fn pow_inv(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        other.pow(Box::new(self.as_number()))
     }
 
+    
     // unary operations: Self -> Float
+    // TODO: median
     fn min(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "min()")
+        unimpl_unary(self, "min()")
     }
     fn max(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "max()")
+        unimpl_unary(self, "max()")
     }
     fn avg(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "avg()")
+        unimpl_unary(self, "avg()")
     }
     fn std(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "std()")
+        unimpl_unary(self, "std()")
     }
     fn sum(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "sum()")
+        unimpl_unary(self, "sum()")
     }
     fn range(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "range()")
+        unimpl_unary(self, "range()")
     }
     fn l2_norm(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "l2_norm()")
+        unimpl_unary(self, "l2_norm()")
     }
     fn l1_norm(&self) -> Result<Float, EvaluationError> {
-        unimpl_unary_number(self, "l1_norm()")
-    }
-    // unary operations: Self -> Self
-
-    fn sin(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
-    {
-        unimpl_unary_self(self, "sin()")
+        unimpl_unary(self, "l1_norm()")
     }
 
-    fn cos(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    // Unary operations: Self -> Self
+    // todo: round, ceil, floor?
+    fn dyn_sin(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "cos()")
+        self.unary_dispatcher(|x|x.sin() , "sin()")
     }
 
-    fn tan(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_cos(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "tan()")
+        self.unary_dispatcher(|x|x.cos() , "cos()")
     }
 
-    fn cotan(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_tan(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "cotan()")
+        self.unary_dispatcher(|x|x.tan() , "tan()")
     }
 
-    fn exp(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_exp(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "exp()")
+        self.unary_dispatcher(|x|x.exp() , "exp()")
     }
 
-    fn log(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_log(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "log()")
+        self.unary_dispatcher(|x|x.ln() , "log()")
     }
 
-    fn log2(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_log2(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "log2()")
+        self.unary_dispatcher(|x|x.log2() , "log2()")
     }
 
-    fn log10(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_log10(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "log10()")
+        self.unary_dispatcher(|x|x.log10() , "log10()")
     }
 
-    fn sqrt(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_sqrt(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "sqrt()")
+        self.unary_dispatcher(|x|x.sqrt() , "sqrt()")
     }
 
-    fn pow2(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_pow2(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "^2")
+        self.unary_dispatcher(|x|x*x , "^2")
     }
 
-    fn pow3(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_pow3(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "^3")
-    }    
+        self.unary_dispatcher(|x|x*x*x , "^3")
+    }
 
-    fn pow4(&self) -> Result<Self, EvaluationError> 
-    where 
-        Self: Sized
+    fn dyn_pow4(&self) -> Result<Box<dyn DynMath>, EvaluationError> 
     {
-        unimpl_unary_self(self, "^4")
+        self.unary_dispatcher(|x|x*x*x*x , "^4")
     }
 
 }
@@ -321,10 +307,22 @@ fn all_scalars(args: &[impl DynMath]) -> bool
 fn unbox_numbers(args: &[impl DynMath], func: &str) -> Result<Vec::<Float>, EvaluationError> {
     let mut res = Vec::new();
     for v in args {
-        res.push(v.number())
+        res.push(v.as_number())
     }
     return Ok(res);
 }
+
+// fn unary_dispatcher(obj: &dyn DynMath, f: Unary, op: &str) -> Result<Box<dyn DynMath>, EvaluationError> {
+//     match obj.category() {
+//         Category::Number => Ok(Box::new(f(obj.as_number()))),
+//         Category::Array => obj.elementwise(f),
+//         _ => Err(EvaluationError::InvalidUnaryOperation {
+//             operation: op.into(),
+//             operand: obj.type_name().into(),
+//         }),     
+//     }
+// }
+
 
 const ZERO_ARGS_ERR: &str = "needs at least one argument";
 const MULTI_ARGS_ERR: &str = "accepts a single array or multiple scalar values";
@@ -386,6 +384,23 @@ where
     }
 }
 
+
+fn dynmath_sum<T>(args: &[T]) -> Result<Float, EvaluationError> 
+where 
+    T: DynMath
+{
+    match args.len() {
+        0 => invalid_args_err("sum", ZERO_ARGS_ERR), 
+        1 => Ok(args[0].iter().sum()),
+        _ if !all_scalars(args) => invalid_args_err("sum", MULTI_ARGS_ERR),
+        _ => match unbox_numbers(args, "sum") {
+            Err(e) => Err(e),
+            Ok(v) => {
+                Ok(v.iter().sum::<Float>())
+            }
+        }
+    }
+}
 
 fn dynmath_avg<T>(args: &[T]) -> Result<Float, EvaluationError> 
 where 
@@ -452,8 +467,8 @@ where
         _ => match unbox_numbers(args, "l1_norm") {
             Err(e) => Err(e),
             Ok(v) => {
-                let sq_sum = v.iter().map(|e| e.abs()).sum::<Float>();
-                Ok(sq_sum)
+                let abs_sum = v.iter().map(|e| e.abs()).sum::<Float>();
+                Ok(abs_sum)
             }
         }
     }
