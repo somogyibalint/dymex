@@ -405,7 +405,6 @@ mod tests {
         let success = ast.parse_tokens();
         assert_matches!(success, Ok(()));
         assert_eq!(ast.rpn_repr(), rpn);
-
     }
 
     #[test]

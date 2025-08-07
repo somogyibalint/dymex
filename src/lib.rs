@@ -22,9 +22,6 @@ mod parser;
 #[allow(unused_imports)]
 pub use crate::parser::*;
 
-mod eval;
-pub use crate::eval::*;
-
 mod dynmath;
 pub use crate::dynmath::*;
 

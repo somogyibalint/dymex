@@ -2,7 +2,9 @@
 use std::{collections::HashMap, hash::Hash};
 use std::fmt::{format, Display};
 use std::rc::Rc;
+use itertools::join; //TODO: remove later
 use crate::*;
+
 
 
 pub struct Evaluator {
@@ -12,8 +14,17 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
-    fn new(ast: AST) -> Self {
+    pub fn new(expression: &str, variables: &[&str]) -> Result<Self, ParsingError> {
+        let mut ts = TokenStream::new();
+        ts.update(expression, variables);
+        let mut ast = AST::new(ts);
+        if let Err(err) = ast.parse_tokens() {
+            return Err(err);
+        }
+        Ok(Self::from_ast(ast))
+    }
 
+    fn from_ast(ast: AST) -> Self {
         let (val, aliases, expr) = flatten_tree(ast);     
         Self {
             values: val,
@@ -22,7 +33,7 @@ impl Evaluator {
         }
     }
 
-    fn evaluate(&mut self, inputs: &HashMap<String, Rc<dyn DynMath>>) -> Result<Box<dyn DynMath>, EvaluationError> {
+    pub fn evaluate(&mut self, inputs: &HashMap<String, Rc<dyn DynMath>>) -> Result<Rc<dyn DynMath>, EvaluationError> {
         for (varname, value) in inputs.iter() {
             let id = self.aliases.get(varname).unwrap();
             self.values.insert(*id, value.clone());
@@ -33,18 +44,17 @@ impl Evaluator {
             .collect::<Vec<u16>>();
         eval_order.sort_by(|a, b| b.cmp(a));
 
-        for expr_id in eval_order {
+        let final_result_id = eval_order.last().unwrap();
+        for expr_id in &eval_order {
             let result = self.expressions[&expr_id].eval(&self.values);
             match result {
                 Err(e) => return Err(e),
                 Ok(res) => {
-                    self.values.insert(expr_id, Rc::from(res)); 
-
+                    self.values.insert(*expr_id, Rc::from(res)); 
                 }
             }
-            
         }
-        todo!();
+        Ok(self.values[final_result_id].clone())
     }
 }
 
@@ -84,26 +94,45 @@ fn flatten_tree(ast: AST)
         id: u16) {
             match tree {
                 Branch::Atom(a) => {
-                    
+                    //RFO: here we insert a new value for every occurance of the same number/constant/var 
                     match a.token.to_owned() {
                         Token::Const(c) => {
+                            println!("Insert const {} {}", id, c.value()); // DEBUG 
                             values.insert(id,Rc::new(c.value()));
                         }
                         Token::Number(x) => {
+                            println!("Insert number {} {}", id, x); // DEBUG 
                             values.insert(id,Rc::new(x));
                         }
                         Token::Var(v) => {
+                            println!("Insert var {} {}", id, v); // DEBUG 
                             aliases.insert( v, id);
                         }
                         _ => panic!("Unexpected token in transform_tree(). This is likely a bug!")
                     };
                 },
                 Branch::Expression(exp, args) => {
-                    let arg_ids: Vec<u16> = args.iter().map(|_| id_gen.get_id()).collect();
+                    // this is not good: if one arg is a const/number/variable id already exists!
+                    // let arg_ids: Vec<u16> = args.iter().map(|_| id_gen.get_id()).collect();
+                    // instead this complicated mess:
+                    let mut arg_ids: Vec<u16> = Vec::new();
+                    for arg in args {
+                        if let Branch::Atom(at) = arg 
+                        && let Token::Var(v) = &at.token {
+                            match aliases.get(v) {
+                                None => arg_ids.push(id_gen.get_id()),
+                                Some(id)  => arg_ids.push(*id)
+                            }
+                        } else {
+                            arg_ids.push(id_gen.get_id());
+                        }
+                    }
+
                     let eval = Evaluand {
                             op: exp.to_owned(), 
                             args: arg_ids.to_owned() 
                         };
+                    println!("Insert expr {} {}", id, exp.token); // DEBUG 
                     expressions.insert( id, eval);
 
 
@@ -149,7 +178,7 @@ impl Evaluand {
     fn eval(&self, values: &HashMap<u16, Rc<dyn DynMath>>) -> Result<Box<dyn DynMath>, EvaluationError> {
         use ArithmeticOperator as AO;
         
-        let get_val = |id| &**values.get(id).unwrap();
+        let get_val = |id| &*values[id];
         
         match &self.op.token {
             Token::ArOp(op) => {
@@ -169,7 +198,10 @@ impl Evaluand {
             Token::Func(fun, max_args) => {
                 debug_assert!(self.args.len() <= *max_args);
                 if *max_args == 1 {
+                    println!("{}", values.iter().map(|(k,_)| format!("{}", k)).collect::<Vec<String>>().join(", "));
+                    println!("get id {}", &self.args[0]); // debug
                     let arg = get_val(&self.args[0]);
+
                     match fun {
                         Function::Sin => return arg.dyn_sin(),
                         Function::Cos => return arg.dyn_cos(),

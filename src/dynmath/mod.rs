@@ -8,7 +8,8 @@ pub const MAXDIM: usize = 3;
 
 mod number;
 mod vector;
-
+mod eval;
+pub use eval::*;
 
 pub enum DynVar<T: DynMath> {
     Number(Float),

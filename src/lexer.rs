@@ -404,7 +404,7 @@ fn parse_single_char_token(c: char) -> Option<Token> {
         '+' => Some(Token::ArOp(ArithmeticOperator::Plus)),
         '-' => Some(Token::ArOp(ArithmeticOperator::Minus)),
         '/' => Some(Token::ArOp(ArithmeticOperator::Div)),
-        '^' => Some(Token::ArOp(ArithmeticOperator::Plus)),
+        '^' => Some(Token::ArOp(ArithmeticOperator::Pow)),
         '*' | '×' | '⋅' => Some(Token::ArOp(ArithmeticOperator::Mul)),
         '=' => Some(Token::AssignOp(AssignmentOperator::Assign)),
         '>' => Some(Token::RelOp(RelationalOperator::Greater)),
