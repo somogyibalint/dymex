@@ -1,40 +1,83 @@
-use crate::{float, Float};
+use crate::{float, Float, MAXDIM};
 use super::{DynMath, EvaluationError, Category, unimpl_binary};
-
+use std::slice::Iter;
 
 impl DynMath for Vec<Float> {
 
-    fn category(&self) -> Category { Category::Number }
+    fn category(&self) -> Category { Category::Array }
 
-    fn shape(&self) -> &[usize] { &[] }
+    fn shape(&self) -> [usize; MAXDIM] { 
+        let mut shape = [0; MAXDIM]; 
+        shape[0] = self.len();
+        shape
+    }
 
-    // sclars match with anything
-    fn shape_matches(&self, _: Box<dyn DynMath>) -> bool { true }
+    fn iterate(&self) -> Iter<'_, Float> {
+        self.iter()
+    }
 
-
-    fn add(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    fn add(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
         match other.category() {
             Category::Number => Ok(Box::new(
                 self.iter().map(|x| x + other.as_number()).collect::<Vec<Float>>()
             )),
             Category::Array => Ok(Box::new(
-                self.iter().zip(other.iter()).map(|(a, b)| a + b).collect::<Vec<Float>>()
+                self.iter().zip(other.iterate()).map(|(a, b)| a + b).collect::<Vec<Float>>()
             )),
             _ => unimpl_binary(self.type_name(), other.type_name(), "+")
         }
     }
 
-    fn sub(&self, other: Box<dyn DynMath>) -> Result<Box<dyn DynMath>, EvaluationError>
+    fn sub(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
         match other.category() {
             Category::Number => Ok(Box::new(
                 self.iter().map(|a| a - other.as_number()).collect::<Vec<Float>>()
             )),
             Category::Array => Ok(Box::new(
-                self.iter().zip(other.iter()).map(|(a, b)| a - b).collect::<Vec<Float>>()
+                self.iter().zip(other.iterate()).map(|(a, b)| a - b).collect::<Vec<Float>>()
             )),
-            _ => unimpl_binary(self.type_name(), other.type_name(), "+")
+            _ => unimpl_binary(self.type_name(), other.type_name(), "-")
+        }
+    }
+
+    fn mul(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|x| x * other.as_number()).collect::<Vec<Float>>()
+            )),
+            Category::Array => Ok(Box::new(
+                self.iter().zip(other.iterate()).map(|(a, b)| a * b).collect::<Vec<Float>>()
+            )),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "*")
+        }
+    }
+
+    fn div(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|x| x / other.as_number()).collect::<Vec<Float>>()
+            )),
+            Category::Array => Ok(Box::new(
+                self.iter().zip(other.iterate()).map(|(a, b)| a / b).collect::<Vec<Float>>()
+            )),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "/")
+        }
+    }
+
+    fn pow(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|x| x.powf(other.as_number())).collect::<Vec<Float>>()
+            )),
+            Category::Array => Ok(Box::new(
+                self.iter().zip(other.iterate()).map(|(a, b)| a.powf(*b)).collect::<Vec<Float>>()
+            )),
+            _ => unimpl_binary(self.type_name(), other.type_name(), "^")
         }
     }
 
@@ -43,7 +86,7 @@ impl DynMath for Vec<Float> {
         Ok(self.iter().fold(float::INFINITY, |a, &b| a.min(b)))
     }
     fn max(&self) -> Result<Float, EvaluationError> {
-        Ok(self.iter().fold(float::INFINITY, |a, &b| a.max(b)))
+        Ok(self.iter().fold(float::NEG_INFINITY, |a, &b| a.max(b)))
     }
     fn range(&self) -> Result<Float, EvaluationError> {
         Ok(self.max()? - self.min()?)

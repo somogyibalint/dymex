@@ -3,9 +3,12 @@
 ///  
 
 use std::fmt;
-use crate::Float;
+use crate::{float, Float};
 
 const MAX_FUNC_ARGS: usize = 64;
+const PISQUARED: Float = float::consts::PI*float::consts::PI;
+const SQRT3: Float = 1.73205080757; // .sqrt() is not const, const::SQRT_3 is unstable feature
+const SQRTPI: Float = 1.77245385091; // .sqrt() is not const 
 
 const INVALIDCHAR : &str = "#?˝`\'&|$@%{}";
 const SPECIAL_CHARS  : &str = "()[].,:+-*/^=<>!";
@@ -103,6 +106,7 @@ impl fmt::Display for AssignmentOperator {
     }
 }
 /// Built in functions
+// TODO: maybe separate variadic and single variable functions ???
 #[derive(Debug, PartialEq, Clone)]
 pub enum Function {
     Min,
@@ -148,6 +152,19 @@ impl fmt::Display for Constant {
             Constant::Sqrt2 => write!(f, "√2"),
             Constant::Sqrt3 => write!(f, "√3"),
             Constant::SqrtPi => write!(f, "√π"),
+        }
+    }
+}
+impl Constant {
+    pub fn value(&self) -> Float {
+        match self {
+            Constant::Pi => float::consts::PI,
+            Constant::Euler => float::consts::E,
+            Constant::Pi2 => PISQUARED,
+            Constant::PiTimes2 => float::consts::TAU,
+            Constant::Sqrt2 => float::consts::SQRT_2,
+            Constant::Sqrt3 => SQRT3,
+            Constant::SqrtPi => SQRTPI,
         }
     }
 }

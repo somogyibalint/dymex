@@ -1,7 +1,7 @@
 // TokenStream -> AST utilizing a Pratt parser
 
 // use std::collections::HashMap;
-use std::fmt::Write;
+use std::{collections::HashMap, fmt::Write, hash::Hash};
 use colored::{Colorize, Color};
 use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
 
@@ -93,6 +93,19 @@ impl AST {
             Some(t) => t.as_rpn_str(),
             None => "".into()
         }
+    }
+
+    pub fn flatten_ast(&self) -> FlatAst {
+        let mut ast = FlatAst::new();
+        match &self.tree {
+            None => {
+                panic!("AST is empty!");
+            },
+            Some(branch) => {
+                traverse_ast(branch, &mut ast, 0);
+            }
+        }
+        ast
     }
 
 }
@@ -328,6 +341,58 @@ fn is_atom(t: & Token) -> bool {
 }
 
 
+/// Non-recursive representation of the AST
+/// 
+pub struct FlatAst {
+    nodes: HashMap<u8, TokenContext>,
+    edges: HashMap<u8, u8>,
+    node_id: u8,
+}
+impl FlatAst {
+    fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            edges: HashMap::new(),
+            node_id: 0,
+        }
+    }
+    fn add_node(&mut self, tc: TokenContext, parent: u8) -> u8 {
+        let id = self.node_id; 
+        self.nodes.insert(id, tc);
+        self.node_id += 1;        
+        self.add_edge(parent, id);
+        id
+    }
+    fn add_edge(&mut self, op: u8, arg: u8) {
+        self.edges.insert(arg, op);
+    }
+    fn print_ast(&self) {
+        println!("Nodes:");
+        for (node_id, node) in &self.nodes {
+            println!("  {node_id:3}: {}", node.token);
+        }
+        println!("Edges:");
+        for (fr, to) in &self.edges {
+            println!("  {fr:3} -> {to:3}");
+        }
+    }
+}
+
+fn traverse_ast(branch: &Branch, ast: &mut FlatAst, parent: u8) {
+    match branch {
+        Branch::Atom(tc) => {
+            let _ = ast.add_node(tc.clone(), parent);
+        },
+        Branch::Expression(tc, args) => {
+            let id = ast.add_node(tc.clone(), parent);
+            for arg in args {
+                traverse_ast(arg, ast, id);
+            }
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -402,5 +467,18 @@ mod tests {
         test_parsing("r.x - x0", &vec!["r", "x0"], "(-: (.: r, x), x0)");   
     }
 
+    #[test]
+    fn test_flattened_ast() {
+        let expr = "x + max(0, sqrt(min(1,2,3,4)))";
+        let var =  &vec!["x"];
+        let mut ts = TokenStream::new();
+        ts.update(expr, var);
+        let mut ast = AST::new(ts);
+        let _ = ast.parse_tokens();
+
+        let flat_ast = ast.flatten_ast();
+        println!("Expression: {}", expr);
+        flat_ast.print_ast();
+    }
 
 }
