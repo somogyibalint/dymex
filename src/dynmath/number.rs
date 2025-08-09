@@ -1,4 +1,4 @@
-use crate::{float, Float, MAXDIM};
+use crate::{Float, MAXDIM};
 use super::{DynMath, EvaluationError, Category, unimpl_binary};
 
 

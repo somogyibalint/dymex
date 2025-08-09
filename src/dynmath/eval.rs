@@ -1,11 +1,7 @@
 
-use std::{collections::HashMap, hash::Hash};
-use std::fmt::{format, Display};
+use std::{collections::HashMap};
 use std::rc::Rc;
-use itertools::join; //TODO: remove later
 use crate::*;
-
-
 
 pub struct Evaluator {
     values: HashMap<u16, Rc<dyn DynMath>>,
@@ -33,8 +29,8 @@ impl Evaluator {
         }
     }
 
-    pub fn evaluate(&mut self, inputs: &HashMap<String, Rc<dyn DynMath>>) -> Result<Rc<dyn DynMath>, EvaluationError> {
-        for (varname, value) in inputs.iter() {
+    pub fn evaluate(&mut self, inputs: &InputVars) -> Result<Rc<dyn DynMath>, EvaluationError> {
+        for (varname, value) in inputs.as_hashmap().iter() {
             let id = self.aliases.get(varname).unwrap();
             self.values.insert(*id, value.clone());
         };
@@ -58,6 +54,28 @@ impl Evaluator {
     }
 }
 
+
+/// Convenience newtype for the DynMath evaluator
+pub struct InputVars(HashMap<String, Rc<dyn DynMath>>);
+impl InputVars {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn insert_owned<T>(&mut self, name: String, value: T) 
+    where T: DynMath {
+        self.0.insert(name, Rc::new(value));
+    }
+
+    pub fn names(&self) -> Vec<&str> {
+        self.0.iter().map(|(k, _)| k.as_str()).collect()
+    }
+
+    pub fn as_hashmap(&self) -> &HashMap<String, Rc<dyn DynMath>> {
+        &self.0
+    }
+
+}
 
 struct IdGenerator {
     _id: u16
@@ -198,11 +216,14 @@ impl Evaluand {
             Token::Func(fun, max_args) => {
                 debug_assert!(self.args.len() <= *max_args);
                 if *max_args == 1 {
+                    // DEBUG >
                     println!("{}", values.iter().map(|(k,_)| format!("{}", k)).collect::<Vec<String>>().join(", "));
-                    println!("get id {}", &self.args[0]); // debug
+                    println!("get id {}", &self.args[0]);
+                    // > DEBUG
                     let arg = get_val(&self.args[0]);
 
                     match fun {
+                        Function::Abs => return arg.dyn_abs(),
                         Function::Sin => return arg.dyn_sin(),
                         Function::Cos => return arg.dyn_cos(),
                         Function::Tan => return arg.dyn_tan(),
@@ -234,7 +255,6 @@ impl Evaluand {
                         Ok(f) => Ok(Box::new(f))
                     }
                 }
-                    
             }
             _ => panic!("wtf")
         }

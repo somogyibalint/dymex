@@ -1,7 +1,7 @@
 // TokenStream -> AST utilizing a Pratt parser
 
 // use std::collections::HashMap;
-use std::{collections::HashMap, fmt::Write, hash::Hash};
+use std::{collections::HashMap, fmt::Write};
 use colored::{Colorize, Color};
 use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
 

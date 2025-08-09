@@ -12,7 +12,7 @@ const SQRTPI: Float = 1.77245385091; // .sqrt() is not const
 
 const INVALIDCHAR : &str = "#?˝`\'&|$@%{}";
 const SPECIAL_CHARS  : &str = "()[].,:+-*/^=<>!";
-const FORBIDDEN_IDS: [&str; 18] = ["min", "max", "avg", "mean", "std", "sin", "cos",
+const FORBIDDEN_IDS: [&str; 19] = ["min", "max", "avg", "mean", "std", "sin", "cos", "abs",
 "tan", "cotan", "exp", "log", "log2", "log10", "sqrt", "pi", "e", "sqrt2", "sqrt3"];
 
 
@@ -115,6 +115,7 @@ pub enum Function {
     Std,
     Sum,
     Range,
+    Abs,
     Sin,
     Cos,
     Tan,
@@ -530,6 +531,7 @@ fn parse_function(word: &str) -> Option<Token>
         "mean" => Some(Token::Func(Function::Avg, MAX_FUNC_ARGS)),
         "std" => Some(Token::Func(Function::Std, MAX_FUNC_ARGS)),
         "sum" => Some(Token::Func(Function::Sum, MAX_FUNC_ARGS)),
+        "abs" => Some(Token::Func(Function::Abs, 1)),
         "sin" => Some(Token::Func(Function::Sin, 1)),
         "cos" => Some(Token::Func(Function::Cos, 1)),
         "tan" => Some(Token::Func(Function::Tan, 1)),
@@ -674,6 +676,15 @@ mod tests {
         assert!(same_tokens(&unwrap_contexts(&res), target));
     }
 
+    // #[test]
+    // fn test_nested_expr() {
+    //     let expr = "pow(2.0, pow(pow(pow(x, y), z), 0.0))";
+    //     let input_var = &["x", "y", "z"];
+
+    //     let res = tokenize(expr, input_var);
+
+    // }
+
     #[test]
     fn test_tokenstream1() {
         let mut ts = TokenStream::new();
@@ -683,6 +694,7 @@ mod tests {
             println!("{}", t.token);
         }
     }
+
 
 
 }

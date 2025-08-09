@@ -1,5 +1,5 @@
 use crate::{float, Float, MAXDIM};
-use super::{DynMath, EvaluationError, Category, unimpl_binary};
+use super::{DynMath, EvaluationError, Category, Unary, unimpl_binary};
 use std::slice::Iter;
 
 impl DynMath for Vec<Float> {
@@ -15,6 +15,11 @@ impl DynMath for Vec<Float> {
     fn iterate(&self) -> Iter<'_, Float> {
         self.iter()
     }
+
+    fn elementwise(&self, func: Unary) -> Result<Box<dyn DynMath>, EvaluationError> {
+        Ok(Box::new(self.iter().map(|x| func(*x)).collect::<Vec<Float>>()))
+    }
+
 
     fn add(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
@@ -113,7 +118,7 @@ impl DynMath for Vec<Float> {
 }
 
 
-
+//TODO: maybe delete this: 
 fn elementwise<T>(array: &[f64], func: T) -> Result<Vec<Float>, EvaluationError> 
 where 
     T: Fn(&Float) -> Float

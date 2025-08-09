@@ -1,18 +1,15 @@
 use dymex::*;
-use std::{collections::HashMap, hash::Hash, rc::Rc};
-
 
 #[test]
 fn simple_expression_binop() {
     let expression = "(1.0 + (a - b)*c) / 2";
-    let mut variables: HashMap<String, Rc<dyn DynMath>> = HashMap::new();
-    variables.insert("a".to_owned(), Rc::new(2.0));
-    variables.insert("b".to_owned(), Rc::new(1.0));
-    variables.insert("c".to_owned(), Rc::new(3.0));
 
-    let varnames: Vec<&str> = variables.iter().map(|(k, _)| k.as_str()).collect();
+    let mut variables= InputVars::new();
+    variables.insert_owned("a".to_owned(), 2.0);
+    variables.insert_owned("b".to_owned(), 1.0);
+    variables.insert_owned("c".to_owned(), 3.0);
 
-    let mut evalutor = Evaluator::new(&expression, &varnames).unwrap();
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
 
     let result = evalutor.evaluate( &variables).unwrap();
     assert_eq!(2.0, result.as_number());   
@@ -21,13 +18,44 @@ fn simple_expression_binop() {
 #[test]
 fn simple_expression_trig() {
     let expression = "cos(pi * (sin(x)^2 + cos(x)^2) / 2)";
-    let mut variables: HashMap<String, Rc<dyn DynMath>> = HashMap::new();
-    variables.insert("x".to_owned(), Rc::new(0.12345));
+    let mut variables = InputVars::new();
+    variables.insert_owned("x".to_owned(), 0.12345);
 
-    let varnames: Vec<&str> = variables.iter().map(|(k, _)| k.as_str()).collect();
-
-    let mut evalutor = Evaluator::new(&expression, &varnames).unwrap();
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
 
     let result = evalutor.evaluate( &variables).unwrap();
     assert!(result.as_number().abs() < 1E-10); // should be 0
+}
+
+#[test]
+fn variadic_expression_trig() {
+    let expression = "min(a, max(5.0, max(abs(v))**2))";
+    let mut variables = InputVars::new();
+    variables.insert_owned("a".to_owned(), 10.0);
+    variables.insert_owned("v".to_owned(), vec![-3.0, -1.0, 0.0, 2.0]); 
+
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
+
+    let result = evalutor.evaluate( &variables).unwrap();
+    assert_eq!(result.as_number(), 9.0);
+}
+
+#[test]
+fn nested_expression() {
+    // does not work, because pow(base, exp) not recognized
+    // let expression = "pow(2.0, pow(pow(pow(x, y), z), 0.0))"; 
+    //TODO: the error message was misleading: UnexpectedToken(37)
+    //TODO: tokenize(expr, input_var) returns with different error for some reason!
+    let expression = "2**(((x**y)**z)**0.0)"; 
+    let mut variables = InputVars::new();
+    variables.insert_owned("x".to_owned(), 3.0);
+    variables.insert_owned("y".to_owned(), 2.0); 
+    variables.insert_owned("z".to_owned(), 2.0);
+
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
+
+    let result = evalutor.evaluate( &variables).unwrap();
+    assert_eq!(result.as_number(), 2.0);
+
+
 }

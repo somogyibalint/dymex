@@ -34,7 +34,7 @@ impl Category {
     }
 }
 
-type Unary = fn(Float) -> Float;
+pub type Unary = fn(Float) -> Float;
 
 #[derive(Error, Debug)]
 pub enum EvaluationError {
@@ -224,6 +224,10 @@ pub trait DynMath : Any {
 
     // Unary operations: Self -> Self
     // todo: round, ceil, floor?
+    fn dyn_abs(&self) -> Result<Box<dyn DynMath>, EvaluationError> {
+        self.unary_dispatcher(|x|x.abs() , "abs()")
+    }
+
     fn dyn_sin(&self) -> Result<Box<dyn DynMath>, EvaluationError> {
         self.unary_dispatcher(|x|x.sin() , "sin()")
     }
