@@ -1,5 +1,6 @@
 use crate::{Float, MAXDIM};
 use super::{DynMath, EvaluationError, Category, unimpl_binary};
+use std::any::Any;
 
 
 impl DynMath for Float {
@@ -10,6 +11,10 @@ impl DynMath for Float {
 
     fn as_number(&self) -> Float {
         *self
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
 

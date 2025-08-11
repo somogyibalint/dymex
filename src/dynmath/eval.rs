@@ -9,14 +9,22 @@ pub struct Evaluator {
     aliases: HashMap<String, u16>
 }
 
+
+
+//CONSIDER Is a self.update(...) method varranted? Or are we OK creating a new 
+// Evaluator every time the expression or variables change?
+
 impl Evaluator {
-    pub fn new(expression: &str, variables: &[&str]) -> Result<Self, ParsingError> {
+    pub fn new(expression: &str, variables: &[&str]) -> Result<Self, DymexError> {
         let mut ts = TokenStream::new();
-        ts.update(expression, variables);
+        if let Err(err) =  ts.update(expression, variables) {            
+            return Err(DymexError::LexicalError(err))
+        }
         let mut ast = AST::new(ts);
         if let Err(err) = ast.parse_tokens() {
-            return Err(err);
+            return Err(DymexError::ParsingError(err));
         }
+
         Ok(Self::from_ast(ast))
     }
 
@@ -29,7 +37,7 @@ impl Evaluator {
         }
     }
 
-    pub fn evaluate(&mut self, inputs: &InputVars) -> Result<Rc<dyn DynMath>, EvaluationError> {
+    pub fn evaluate(&mut self, inputs: &InputVars) -> Result<Box<dyn DynMath>, EvaluationError> {
         for (varname, value) in inputs.as_hashmap().iter() {
             let id = self.aliases.get(varname).unwrap();
             self.values.insert(*id, value.clone());
@@ -46,11 +54,15 @@ impl Evaluator {
             match result {
                 Err(e) => return Err(e),
                 Ok(res) => {
+                    if expr_id == final_result_id {
+                        return Ok(Box::from(res))
+                    }
                     self.values.insert(*expr_id, Rc::from(res)); 
                 }
             }
         }
-        Ok(self.values[final_result_id].clone())
+        panic!("ERROR: end of evaluation chain")
+        // Ok(self.values[final_result_id].clone())
     }
 }
 

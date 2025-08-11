@@ -400,7 +400,7 @@ mod tests {
 
     fn test_parsing(expr: &str, var: &[&str], rpn: &str) {
         let mut ts = TokenStream::new();
-        ts.update(expr, var);
+        ts.update(expr, var).unwrap();
         let mut ast = AST::new(ts);
         let success = ast.parse_tokens();
         assert_matches!(success, Ok(()));
@@ -471,7 +471,7 @@ mod tests {
         let expr = "x + max(0, sqrt(min(1,2,3,4)))";
         let var =  &vec!["x"];
         let mut ts = TokenStream::new();
-        ts.update(expr, var);
+        ts.update(expr, var).unwrap();
         let mut ast = AST::new(ts);
         let _ = ast.parse_tokens();
 

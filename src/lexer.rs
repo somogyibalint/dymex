@@ -11,7 +11,7 @@ const SQRT3: Float = 1.73205080757; // .sqrt() is not const, const::SQRT_3 is un
 const SQRTPI: Float = 1.77245385091; // .sqrt() is not const 
 
 const INVALIDCHAR : &str = "#?˝`\'&|$@%{}";
-const SPECIAL_CHARS  : &str = "()[].,:+-*/^=<>!";
+const SPECIAL_CHARS  : &str = "()[].,:+-*/^=<>!π";
 const FORBIDDEN_IDS: [&str; 19] = ["min", "max", "avg", "mean", "std", "sin", "cos", "abs",
 "tan", "cotan", "exp", "log", "log2", "log10", "sqrt", "pi", "e", "sqrt2", "sqrt3"];
 
@@ -278,15 +278,17 @@ impl TokenStream {
     }
 
     /// Update the expression and variable keys, tokenize the expression if changed
-    pub fn update(&mut self, expression: &str, variables: &[&str] ) {
-        if self.expr == expression && self.var == variables {return;}
+    pub fn update(&mut self, expression: &str, variables: &[&str] ) 
+    -> Result<(), TokenizerError> {
+        // maybe save last Err so we can return it:
+        // if self.expr == expression && self.var == variables {return ???}  
 
         self.expr = expression.into();
         self.var = variables.iter().copied().map(|s| s.into()).collect();
-        self.tokenize();
+        self.tokenize()
     }
 
-    fn tokenize(&mut self) -> bool {
+    fn tokenize(&mut self) -> Result<(), TokenizerError> {
         let vars : Vec<&str> = self.var.iter().map(|s| s as &str).collect();
         let res = tokenize(&self.expr, &vars);
         match res {
@@ -294,14 +296,12 @@ impl TokenStream {
                 self.tokens = v.clone();
                 self.tokens_reversed = v;
                 self.tokens_reversed.reverse();
-                self.err = None;
-                return true;
+                Ok(())           
             }
             Err(e) => {
                 self.tokens.clear();
                 self.tokens_reversed.clear();
-                self.err = Some(e);
-                return false;
+                Err(e)
             }
         }
     }
@@ -410,6 +410,7 @@ fn parse_single_char_token(c: char) -> Option<Token> {
         '=' => Some(Token::AssignOp(AssignmentOperator::Assign)),
         '>' => Some(Token::RelOp(RelationalOperator::Greater)),
         '<' => Some(Token::RelOp(RelationalOperator::Lesser)),
+        'π' => Some(Token::Const(Constant::Pi)),
         _ => None
     }
 }
@@ -688,8 +689,8 @@ mod tests {
     #[test]
     fn test_tokenstream1() {
         let mut ts = TokenStream::new();
-        ts.update("(1 + x) * 3", &vec!["x"]);
-        assert!(ts.tokenize());
+        let expr = "(1 + x) * 3";
+        let _ = ts.update(expr, &vec!["x"]).unwrap();
         for t in ts.tokens {
             println!("{}", t.token);
         }

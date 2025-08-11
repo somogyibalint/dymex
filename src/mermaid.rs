@@ -41,7 +41,7 @@ impl MermaidGraph {
         }
         
         let mut ts = TokenStream::new();
-        ts.update(&expr,&vars);
+        ts.update(&expr,&vars).unwrap(); //TODO eliminate this unwrap
         let mut ast = AST::new(ts);
         _ = ast.parse_tokens().unwrap();
 

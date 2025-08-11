@@ -1,6 +1,7 @@
 use crate::{float, Float, MAXDIM};
 use super::{DynMath, EvaluationError, Category, Unary, unimpl_binary};
 use std::slice::Iter;
+use std::any::Any;
 
 impl DynMath for Vec<Float> {
 
@@ -10,6 +11,10 @@ impl DynMath for Vec<Float> {
         let mut shape = [0; MAXDIM]; 
         shape[0] = self.len();
         shape
+    }
+
+        fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn iterate(&self) -> Iter<'_, Float> {

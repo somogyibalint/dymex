@@ -114,6 +114,8 @@ pub trait DynMath : Any {
         panic!("Panic: `{}` is not a number.", self.type_name())
     }
 
+    fn as_any(&self) -> &dyn Any;
+
     /// Return an iterator if possible
     // Here it's ok to panic, this should be only called after matching on self.category()
     fn iterate(&self) -> Iter<'_, Float> {

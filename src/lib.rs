@@ -1,9 +1,9 @@
 #![allow(dead_code)] //! FIXME
 
 #[cfg(feature = "default")]
-use std::f64 as float;
+pub use std::f64 as float;
 #[cfg(feature = "default")]
-type Float = f64;
+pub type Float = f64;
 
 #[cfg(feature = "single_precision")]
 use std::f32 as float;
@@ -21,6 +21,9 @@ pub use crate::lexer::*;
 mod parser;
 #[allow(unused_imports)]
 pub use crate::parser::*;
+
+mod error;
+pub use crate::error::*;
 
 mod dynmath;
 pub use crate::dynmath::*;

@@ -1,5 +1,8 @@
 use dymex::*;
 
+mod helpers;
+use helpers::approx_eq;
+
 #[test]
 fn simple_expression_binop() {
     let expression = "(1.0 + (a - b)*c) / 2";
@@ -41,7 +44,7 @@ fn variadic_expression_trig() {
 }
 
 #[test]
-fn nested_expression() {
+fn nested_expression1() {
     // does not work, because pow(base, exp) not recognized
     // let expression = "pow(2.0, pow(pow(pow(x, y), z), 0.0))"; 
     //TODO: the error message was misleading: UnexpectedToken(37)
@@ -56,6 +59,32 @@ fn nested_expression() {
 
     let result = evalutor.evaluate( &variables).unwrap();
     assert_eq!(result.as_number(), 2.0);
+}
 
 
+//TODO UNICODE support
+// #[test]
+// fn nested_expression2() {
+    
+//     let expression = "cos(π/2 + sin(cos(sin(π/2))*π))"; 
+//     let mut variables = InputVars::new();
+
+//     let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
+
+//     let result = evalutor.evaluate( &variables).unwrap();
+//     assert_eq!(result.as_number(), 0.0);
+// }
+
+
+
+#[test]
+fn nested_expression2() {
+    
+    let expression = "cos(pi/2 + sin(1 + cos(sin(pi/2)*pi)))"; 
+    let variables = InputVars::new();
+
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
+
+    let result = evalutor.evaluate( &variables).unwrap();
+    assert!(approx_eq(result.as_number(), 0.0));
 }

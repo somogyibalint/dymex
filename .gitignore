@@ -12,4 +12,4 @@ target/
 *.zip
 
 Cargo.lock
-notes_todo.txt
+notes_todo.md
