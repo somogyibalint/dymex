@@ -17,6 +17,11 @@ pub enum ParsingError {
     InvalidOperation(usize, String),
     NotImplemented(String)
 }
+impl ParsingError {
+    pub fn user_message(&self, expression: &str) -> String {
+        todo!();
+    }
+}
 
 /// AST
 pub struct AST {

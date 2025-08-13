@@ -14,9 +14,9 @@ type Float = f32;
 #[cfg(test)] #[macro_use]
 extern crate assert_matches;
 
-mod lexer;
+mod tokenizer;
 #[allow(unused_imports)]
-pub use crate::lexer::*;
+pub use crate::tokenizer::*;
 
 mod parser;
 #[allow(unused_imports)]
