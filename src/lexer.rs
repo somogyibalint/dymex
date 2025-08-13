@@ -316,13 +316,17 @@ fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, Tokeni
     let mut res: Vec<TokenContext> = vec![];
     let mut cursor = 0;
 
+    let expression = input.chars().collect::<Vec<char>>();
+
+    //    if let Some(next) = input.chars().nth(cursor) {
+    // let nextnext = input.chars().nth(cursor+1).unwrap_or(' ');
     loop {
-        if let Some(next) = input.chars().nth(cursor) {
-            let nextnext = input.chars().nth(cursor+1).unwrap_or(' ');
+        if let Some(next) = expression.get(cursor) {
+            let nextnext = expression.get(cursor+1).unwrap_or(&' ');
             if next.is_whitespace() {
                 cursor +=1;
-            } else if next.is_alphabetic() || next == '_' {
-                match parse_identifier(&input[cursor..], cursor, variables, res.last()) { 
+            } else if next.is_alphabetic() || *next == '_' {
+                match parse_identifier(&expression[cursor..], cursor, variables, res.last()) { 
                     Ok((t, wordsize)) => {
                         res.push(TokenContext { token: t, at: cursor, len: wordsize });
                         cursor += wordsize;
@@ -333,16 +337,16 @@ fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, Tokeni
                     }
                 }
             } else if next.is_ascii_digit() 
-                || (next == '-' && nextnext.is_ascii_digit() ) {
-                if let Some((t, wordsize)) = parse_number(&input[cursor..]) {
+                || (next == &'-' && nextnext.is_ascii_digit() ) {
+                if let Some((t, wordsize)) = parse_number(&expression[cursor..]) {
                     res.push(TokenContext { token: t, at: cursor, len: wordsize });
                     cursor += wordsize;
                     continue;
                 } else {
                     return Err(TokenizerError::InvalidNumberFormat(cursor));
                 } 
-            } else if SPECIAL_CHARS.contains(next) {
-                if let Some((t, advance)) = parse_special_characters(next, nextnext) {
+            } else if SPECIAL_CHARS.contains(*next) {
+                if let Some((t, advance)) = parse_special_characters(*next, *nextnext) {
                     res.push(TokenContext { token: t, at: cursor, len: advance });
                     cursor += advance;
                     continue;
@@ -350,7 +354,7 @@ fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, Tokeni
                     return Err(TokenizerError::SyntaxError(cursor))
                 }
             } else {  
-                return Err(TokenizerError::InvalidCharacter(next, cursor));
+                return Err(TokenizerError::InvalidCharacter(*next, cursor));
             }
         } else {
             break;
@@ -432,12 +436,12 @@ fn parse_double_char_token(c1: char, c2: char) -> Option<Token> {
 }
 
 /// Parse number: 2, 2.103, 0.3E6, 3.0e-5
-fn parse_number(s: &str) -> Option<(Token, usize)> {
-    let mut numbrestring = s;
+fn parse_number(s: &[char]) -> Option<(Token, usize)> {
+    let mut number_characters = s;
     let mut dots: usize = 0;
     let mut exp: usize = 0;
     let mut after_exp: bool = false;
-    for (i, c) in s.chars().enumerate() {
+    for (i, c) in s.iter().enumerate() {
         match (c, dots, exp) {
             ('.', 0, _) => {
                 dots += 1;
@@ -460,14 +464,15 @@ fn parse_number(s: &str) -> Option<(Token, usize)> {
                 after_exp = false;
             }
             _ => { if !c.is_ascii_digit() {
-                    numbrestring = &s[..i];
+                    number_characters = &s[..i];
                     break;
                 }
             }
         }
     }
-    if let Ok(x) = str::parse::<Float>(numbrestring) {
-        Some((Token::Number(x), numbrestring.len()))
+    let numberstr : String = number_characters.iter().collect();
+    if let Ok(x) = str::parse::<Float>(&numberstr) {
+        Some((Token::Number(x), number_characters.len()))
     } else {
         None
     }
@@ -486,24 +491,28 @@ fn is_ident_char(c: char) -> bool {
 /// needed for error reporting. The previous token needs to be provided 
 /// to allow `a.b` even if `b` is not a user defined variable. 
 fn parse_identifier(
-    s: &str, 
+    s: &[char], 
     start:usize, 
     vars: &[&str], 
-    prev: Option<&TokenContext>
+    previous: Option<&TokenContext>
     ) -> Result<(Token, usize), TokenizerError> {
-    let word = match s.chars()
+    let id_chars = match s.iter()
         .enumerate()
-        .filter(|(_, c)| !is_ident_char(*c)).next() {
+        .filter(|(_, c)| !is_ident_char(**c)).next() {
             Some((i_end, _) ) => &s[..i_end],
             None => &s,
         };
-    if let Some(func) = parse_function(word) {
-        return Ok((func, word.len()));
+    let id: String = id_chars.iter().collect();
+    if let Some(func) = parse_function(&id) {
+        return Ok((func, id_chars.len()));
     }
-    if let Some(constant) = parse_const(word) {
-        return Ok((constant, word.len()));
+    if let Some(constant) = parse_const(&id) {
+        return Ok((constant, id_chars.len()));
     }
-    return parse_variable(word, start, vars, prev);
+    match parse_variable(&id, start, vars, previous) {
+        Ok(token) => return Ok((token, id_chars.len())),
+        Err(err) => return Err(err)
+    }
 }
 
 fn parse_variable(
@@ -511,13 +520,15 @@ fn parse_variable(
     start: usize,
     vars: &[&str], 
     prev: Option<&TokenContext>
-    ) -> Result<(Token, usize), TokenizerError> {
+    ) -> Result<Token, TokenizerError> {
     // special case for fields: for `a.b`, only `a` needs to be a variable keys,
     // the existence of `b` can only be checked during evaluation.
-    let res = (Token::Var(word.into()), word.len()); 
-    match (prev, vars.contains(&word)) {
-        (Some(tc), _) if tc.token == Token::Dot => {Ok(res)},
-        (_, true) => {Ok(res)}
+    let after_dot = if let Some(prev_tc) = prev 
+    && prev_tc.token == Token::Dot { true } else { false};
+
+    match (after_dot, vars.contains(&word)) {
+        (true, _) => {Ok(Token::Var(word.into()))},
+        (_, true) => {Ok(Token::Var(word.into()))}
         (_, _) => { return Err(TokenizerError::UndefinedVariable(start, word.into())) }
     }
 }
@@ -549,7 +560,7 @@ fn parse_function(word: &str) -> Option<Token>
 fn parse_const(word: &str) -> Option<Token>
 {
     match word.to_lowercase().as_str() {
-        "pi" => Some(Token::Const(Constant::Pi)),
+        "pi" | "π" => Some(Token::Const(Constant::Pi)),
         "e"  => Some(Token::Const(Constant::Euler)),
         "sqrt2" => Some(Token::Const(Constant::Sqrt2)),
         "sqrt3" => Some(Token::Const(Constant::Sqrt2)),
@@ -561,6 +572,10 @@ fn parse_const(word: &str) -> Option<Token>
 mod tests {
     use crate::TokenizerError;
     use super::*;
+
+    fn charslice(s: &str) -> Vec<char> {
+        s.chars().collect()
+    }
 
     fn same_tokens(tokens1 : &[Token], tokens2 : &[Token]) -> bool {
         if tokens1.len() != tokens2.len() {return false;}
@@ -586,13 +601,13 @@ mod tests {
 
     #[test]
     fn test_number() {
-        assert_eq!(parse_number("0.123+pi"), Some((Token::Number(0.123), 5)));
-        assert_eq!(parse_number("0.2E1 + XXX"), Some((Token::Number(2.0), 5)));
-        assert_eq!(parse_number("20.0e-1"), Some((Token::Number(2.0), 7)));
-        assert_eq!(parse_number("8 "), Some((Token::Number(8.0), 1)));
-        assert_eq!(parse_number("2.0*pi "), Some((Token::Number(2.0), 3)));
-        assert_eq!(parse_number("-1.0"), Some((Token::Number(-1.0), 4)));
-        assert_eq!(parse_number("-1.0e-1"), Some((Token::Number(-0.1), 7)));
+        assert_eq!(parse_number(&charslice("0.123+pi")), Some((Token::Number(0.123), 5)));
+        assert_eq!(parse_number(&charslice("0.2E1 + XXX")), Some((Token::Number(2.0), 5)));
+        assert_eq!(parse_number(&charslice("20.0e-1")), Some((Token::Number(2.0), 7)));
+        assert_eq!(parse_number(&charslice("8 ")), Some((Token::Number(8.0), 1)));
+        assert_eq!(parse_number(&charslice("2.0*pi ")), Some((Token::Number(2.0), 3)));
+        assert_eq!(parse_number(&charslice("-1.0")), Some((Token::Number(-1.0), 4)));
+        assert_eq!(parse_number(&charslice("-1.0e-1")), Some((Token::Number(-0.1), 7)));
     }
 
     #[test]
@@ -600,19 +615,28 @@ mod tests {
         let input_vars = vec!("a", "center", "eV2nm");
         let start = 13;
 
-        let res = parse_identifier("max(15)", start, &input_vars, None);
+        let id = &charslice("max(15)");
+        let res = parse_identifier(id, start, &input_vars, None);
         assert_matches!(res, Ok((Token::Func(Function::Max, _), 3)) );
 
-        let res = parse_identifier("_center", start, &input_vars, None);
+        let id = &charslice("_center");
+        let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Err(TokenizerError::UndefinedVariable(start, "_center".into())) );
 
-        let res = parse_identifier("center*5", start, &input_vars, None);
+        let id = &charslice("center*5");
+        let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Var("center".into()), 6)));
-
-        let res = parse_identifier("pi^2", start, &input_vars, None);
+        
+        let id = &charslice("pi^2");
+        let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 2)));
+        
+        let id = &charslice("π^2");
+        let res = parse_identifier(id, start, &input_vars, None);
+        assert_eq!(res, Ok((Token::Const(Constant::Pi), 1)));
 
-        let res = parse_identifier("eV2nm * λ", start, &input_vars, None);
+        let id = &charslice("eV2nm * λ");
+        let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Var("eV2nm".into()), 5)));
     }
 

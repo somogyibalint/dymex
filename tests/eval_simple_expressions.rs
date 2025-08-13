@@ -63,17 +63,18 @@ fn nested_expression1() {
 
 
 //TODO UNICODE support
-// #[test]
-// fn nested_expression2() {
+#[test]
+fn test_unicode() {
     
-//     let expression = "cos(π/2 + sin(cos(sin(π/2))*π))"; 
-//     let mut variables = InputVars::new();
+    let expression = "cos(ϕ + π/2)"; 
+    let mut variables = InputVars::new();
+    variables.insert_owned("ϕ".into(), 0.0);
 
-//     let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
+    let mut evalutor = Evaluator::new(&expression, &variables.names()).unwrap();
 
-//     let result = evalutor.evaluate( &variables).unwrap();
-//     assert_eq!(result.as_number(), 0.0);
-// }
+    let result = evalutor.evaluate( &variables).unwrap();
+    assert!(approx_eq(result.as_number(), 0.0));
+}
 
 
 
