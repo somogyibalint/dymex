@@ -1,7 +1,5 @@
 use dymex::*;
 
-mod helpers;
-use helpers::approx_eq;
 
 #[test]
 fn simple_expression_binop() {
@@ -76,7 +74,7 @@ fn test_unicode() {
     assert!(approx_eq(result.as_number(), 0.0));
 }
 
-
+  
 
 #[test]
 fn nested_expression2() {

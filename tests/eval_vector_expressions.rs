@@ -1,9 +1,6 @@
 use dymex::*;
 
 
-mod helpers;
-use helpers::approx_eq;
-
 
 #[test]
 fn test_ax_plus_b() {

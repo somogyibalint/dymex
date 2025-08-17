@@ -1,72 +1,16 @@
-/// Turn an expression string into a TokenStream
+/// Turn an expression string a stream of tokens
 ///
 ///  
 
 use crate::Float;
 use super::token::*;
+use super::error::*;
 
 const MAX_FUNC_ARGS: usize = 64;
 const INVALIDCHAR : &str = "#?˝`\'&|$@%{}";
 const SPECIAL_CHARS  : &str = "()[].,:+-*/^=<>!π";
 const FORBIDDEN_IDS: [&str; 19] = ["min", "max", "avg", "mean", "std", "sin", "cos", "abs",
 "tan", "cotan", "exp", "log", "log2", "log10", "sqrt", "pi", "e", "sqrt2", "sqrt3"];
-
-
-/// An error reported by the parser.
-#[derive(Debug, Clone, PartialEq)]
-pub enum TokenizerError {
-    SyntaxError(usize), /// uncategorized tokenizer error
-    InvalidCharacter(char, usize),
-    InvalidNumberFormat(usize),
-    UndefinedVariable(usize, String),
-    InvalidVariableIdentifier(String),
-}
-impl TokenizerError {
-    pub fn user_message(&self, expression: &str) -> String {
-        let (mut msg, pos, hint) = match self {
-            Self::SyntaxError(i) => {
-                (format!("Syntax error:"), 
-                Some(i), 
-                None)
-            }
-            Self::InvalidCharacter(c, i) => {
-                (format!("Invalid character: {}", c), 
-                Some(i), 
-                None)
-            }
-            Self::InvalidNumberFormat(i) => {
-                (format!("Invalid number formatting:"), 
-                Some(i), 
-                Some("1, 3.14, 1e10, 1.23E10"))
-            }
-            Self::UndefinedVariable(i, name) => {
-                (format!("Undefined variable: {}", name), 
-                Some(i), 
-                None)
-            }
-            Self::InvalidVariableIdentifier(s) => {
-                (format!("Invalid variable name: {}", s), 
-                None, 
-                None)
-            }
-        };
-        msg.push('\n');
-        msg.push_str(expression);
-        if let Some(pos) = pos {
-            msg.push('\n');
-            for _ in 0..pos-1 {
-                msg.push(' ');
-            };
-            msg.push(' ');
-        }
-        if let Some(hint) = hint {
-            msg.push('\n');
-            msg.push_str(hint);
-        };
-        msg
-    }
-}
-
 
 
 /// A token with additional context. The position in the original expression
@@ -100,7 +44,6 @@ pub struct TokenStream {
     var: Vec<String>,
     err: Option<TokenizerError>,
 }
-
 impl TokenStream {
     pub fn new() -> Self {
         Self {
@@ -164,7 +107,7 @@ impl TokenStream {
 
 
 /// Turns the string representation into token with additional context
-fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
+pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
 
     if let Err(e) = check_input_variables(variables) { return Err(e); }
     if let Err(e) = check_illegal_characters(input) { return Err(e); } 
@@ -233,9 +176,16 @@ fn check_illegal_characters(s: &str) -> Result<(), TokenizerError>{
 
 /// Check if there is an input variable with name that collides with reserved words.
 fn check_input_variables(variables: &[&str]) -> Result<(), TokenizerError> {
-    for var in variables {
-        if FORBIDDEN_IDS.contains(var) {
-            return Err(TokenizerError::InvalidVariableIdentifier((*var).into()));
+    for var_name in variables {
+        if FORBIDDEN_IDS.contains(var_name) {
+            return Err(TokenizerError::InvalidVariableName((*var_name).into(), VARNAME_ERR1));
+        }
+        if !var_name.chars().all(|x| is_ident_char(x) ) {
+            return Err(TokenizerError::InvalidVariableName((*var_name).into(), VARNAME_ERR2));
+        }
+        let first = var_name.chars().next().unwrap();
+        if first.is_ascii_digit() {
+            return Err(TokenizerError::InvalidVariableName((*var_name).into(), VARNAME_ERR3));
         }
     }
     Ok(())
@@ -292,7 +242,7 @@ fn parse_double_char_token(c1: char, c2: char) -> Option<Token> {
 }
 
 /// Parse number: 2, 2.103, 0.3E6, 3.0e-5
-fn parse_number(s: &[char]) -> Option<(Token, usize)> {
+pub(super) fn parse_number(s: &[char]) -> Option<(Token, usize)> {
     let mut number_characters = s;
     let mut dots: usize = 0;
     let mut exp: usize = 0;
@@ -316,9 +266,14 @@ fn parse_number(s: &[char]) -> Option<(Token, usize)> {
 
             }
             // special case for E-1
-            ('-', _, _) if after_exp => { 
+            ('-' | '+', _, _) if after_exp => { 
                 after_exp = false;
             }
+            // allow for 1E6 = 1_000_000
+            ('_', 0, 0) => {
+
+            }
+            // here we may introduce a check to forbid 2X instead 2 X
             _ => { if !c.is_ascii_digit() {
                     number_characters = &s[..i];
                     break;
@@ -326,7 +281,7 @@ fn parse_number(s: &[char]) -> Option<(Token, usize)> {
             }
         }
     }
-    let numberstr : String = number_characters.iter().collect();
+    let numberstr : String = number_characters.iter().filter(|c| **c != '_').collect();
     if let Ok(x) = str::parse::<Float>(&numberstr) {
         Some((Token::Number(x), number_characters.len()))
     } else {
@@ -424,14 +379,15 @@ fn parse_const(word: &str) -> Option<Token>
     }
 }
 
+pub(super) fn charslice(s: &str) -> Vec<char> {
+    s.chars().collect()
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::TokenizerError;
     use super::*;
-
-    fn charslice(s: &str) -> Vec<char> {
-        s.chars().collect()
-    }
 
     fn same_tokens(tokens1 : &[Token], tokens2 : &[Token]) -> bool {
         if tokens1.len() != tokens2.len() {return false;}
@@ -442,13 +398,14 @@ mod tests {
         tcs.iter().cloned().map(|tc| tc.token ).collect()
     }
 
-
+    // TODO: move to err
     #[test]
     fn test_invalid_names() {
-        assert_eq!(check_input_variables(&["pi"]), Err(TokenizerError::InvalidVariableIdentifier("pi".into())));
+        assert_eq!(check_input_variables(&["pi"]), Err(TokenizerError::InvalidVariableName("pi".into(), VARNAME_ERR1)));
         assert_eq!(check_input_variables(&["ip"]), Ok(()));
     }
     
+    // TODO: move to err
     #[test]
     fn test_characters() {
         assert_eq!(check_illegal_characters("([{"), Err(TokenizerError::InvalidCharacter('{', 2)));

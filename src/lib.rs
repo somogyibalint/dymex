@@ -31,3 +31,5 @@ pub use crate::dynmath::*;
 mod mermaid;
 pub use crate::mermaid::*;
 
+mod helpers;
+pub use crate::helpers::*;

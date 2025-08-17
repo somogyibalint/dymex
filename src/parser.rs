@@ -1,9 +1,8 @@
-// TokenStream -> AST utilizing a Pratt parser
+/// Turn a stream of tokens into an anstract syntax tree
 
-// use std::collections::HashMap;
 use std::{collections::HashMap, fmt::Write};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
+use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, UserMessage};
 
 
 /// An error reported by the parser.
@@ -18,12 +17,12 @@ pub enum ParsingError {
     NotImplemented(String)
 }
 impl ParsingError {
-    pub fn user_message(&self, expression: &str) -> String {
+    pub fn user_message(&self) -> UserMessage {
         todo!();
     }
 }
 
-/// AST
+/// Abstract syntax tree
 pub struct AST {
     ts: TokenStream,
     pub tree: Option<Branch>
@@ -116,8 +115,8 @@ impl AST {
 }
 
 
-/// Lisp S-expression representing the AST
-/// atom: number, constant or input variable
+/// Resursive data structure for the AST 
+/// Lisp S-expression representing the AST atom: number, constant or input variable
 /// Expression: an operation (head) and the operands (sub-branches)
 #[derive(Debug, PartialEq, Clone)]
 pub enum Branch {
@@ -285,7 +284,6 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
             };
             continue;    
         }
-
         break;
     }
     Ok(lhs)
