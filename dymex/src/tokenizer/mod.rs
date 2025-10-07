@@ -3,8 +3,12 @@
 ///  
 
 use crate::Float;
-use super::token::*;
-use super::error::*;
+
+mod token;
+pub use token::*;
+mod error;
+pub use error::*;
+
 
 const MAX_FUNC_ARGS: usize = 64;
 const INVALIDCHAR : &str = "#?˝`\'&|$@%{}";
@@ -94,7 +98,7 @@ impl TokenStream {
                 self.tokens = v.clone();
                 self.tokens_reversed = v;
                 self.tokens_reversed.reverse();
-                Ok(())           
+                Ok(())
             }
             Err(e) => {
                 self.tokens.clear();
@@ -370,9 +374,11 @@ fn parse_function(word: &str) -> Option<Token>
 
 fn parse_const(word: &str) -> Option<Token>
 {
+    if word =="e" {
+        return Some(Token::Const(Constant::Euler))
+    }
     match word.to_lowercase().as_str() {
         "pi" | "π" => Some(Token::Const(Constant::Pi)),
-        "e"  => Some(Token::Const(Constant::Euler)),
         "sqrt2" => Some(Token::Const(Constant::Sqrt2)),
         "sqrt3" => Some(Token::Const(Constant::Sqrt2)),
         _ => None

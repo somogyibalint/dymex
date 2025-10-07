@@ -2,25 +2,14 @@
 
 use std::{collections::HashMap, fmt::Write};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, UserMessage};
+use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
 
-
-/// An error reported by the parser.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParsingError {
-    UnexpectedToken(usize),
-    UnexpectedLP(usize), 
-    MissingRP(i32), 
-    MissingArgument(usize),
-    TooManyArguments(usize),
-    InvalidOperation(usize, String),
-    NotImplemented(String)
-}
-impl ParsingError {
-    pub fn user_message(&self) -> UserMessage {
-        todo!();
-    }
-}
+mod latex;
+pub use latex::*;
+mod error;
+pub use error::ParsingError;
+mod mermaid;
+pub use mermaid::*;
 
 /// Abstract syntax tree
 pub struct AST {
@@ -128,7 +117,7 @@ impl Branch {
     /// Print the (sub)tree in reverse polish notation.
     pub fn as_rpn_str(&self) -> String {
         let mut s = String::new();
-        self.recurse_tree(&mut s)
+        self.recurse_tree_rpn(&mut s)
     }
 
     /// Print expression with syntax highlighting
@@ -163,13 +152,13 @@ impl Branch {
         print!("\r\n");
     }
 
-    fn recurse_tree(&self, s: &mut String) -> String {
+    fn recurse_tree_rpn(&self, s: &mut String) -> String {
         match self {
             Self::Atom(tc) => write!(s, "{}", tc.token).unwrap(),
             Self::Expression(tc, children) => {
                 write!(s, "({}: ", tc.token).unwrap();
                 for branch in children {
-                    branch.recurse_tree(s);
+                    branch.recurse_tree_rpn(s);
                     write!(s, ", ").unwrap();
                 }
                 s.pop(); s.pop();
@@ -179,6 +168,7 @@ impl Branch {
         s.clone()
     }
 
+    
 }
 
 
@@ -234,8 +224,11 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
         // operator -> recursion
         _=> {
             if let Some((_, r_bp)) = prefix_precedence(&next.token) {
-                let rhs = pratt_parser(ts, r_bp).unwrap();
-            Branch::Expression(next, vec![rhs])
+                let try_rhs = pratt_parser(ts, r_bp); 
+                match try_rhs {
+                    Ok(rhs) => return Ok(Branch::Expression(next, vec![rhs])),
+                    Err(err) => return Err(err)
+                }
             } else {
                 return Err(ParsingError::UnexpectedToken(next.at)); // prefix operator that is not + - 
             }

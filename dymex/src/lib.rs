@@ -28,8 +28,10 @@ pub use crate::error::*;
 mod dynmath;
 pub use crate::dynmath::*;
 
-mod mermaid;
-pub use crate::mermaid::*;
-
 mod helpers;
 pub use crate::helpers::*;
+
+
+pub trait Latex {
+    fn latex(&self) -> String;
+}

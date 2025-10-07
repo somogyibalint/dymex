@@ -37,9 +37,10 @@ impl UserMessage {
         }
     }
 
-    fn full_message(&self, expression: &str) -> String {
+    pub fn full_message(&self, expression: &str) -> String {
         let mut msg = format!("{}\n", self.msg);
         msg.push_str(expression);
+        msg.push_str("\n");
         if let Some(cursor) = self.cursor {
             for _ in 0..cursor { msg.push(' '); };
             msg.push_str("^\n");

@@ -1,0 +1,202 @@
+:root {
+    --backgroundColor: #968c83;
+    --foregroundColor: #45373c;
+    --black: #20111b;
+    --red: #be100e;
+    --green: #858162;
+    --yellow: #eaa549;
+    --blue: #426a79;
+    --purple: #97522c;
+    --cyan: #989a9c;
+    --white: #d5ccba;
+    --brightBlack: #5e5252;
+
+    /* --opColor: var(var(--yellow));
+    --funcColor: var(--purple);
+    --varColor: var(--red);
+    --constColor: var(--blue); */
+}
+
+/*font-family: "Segoe UI", Helvetica, Arial, sans-serif, "Segoe UI Symbol";*/
+html, body {
+    background-color: var(--backgroundColor);
+    color: var(--foregroundColor);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, Firacode Nerd Font;
+    margin: 20px;
+    position: fixed;
+    /* overflow-y: scroll; */
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+#main {
+    /* align-content: center; */
+    min-width: 80%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+} 
+
+.tabs {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tabs-list {
+    display: flex;
+    width: fit-content;
+    box-sizing: border-box;
+    flex: 1;
+    flex-direction: row;
+    padding: 0.25rem;
+    border: none;
+    border-radius: 0.5rem;
+    gap: 0.25rem;
+    background-color: var(--foregroundColor);
+    color: var(--white);
+}
+
+.tabs-trigger {
+    padding: 4px 8px;
+    border: none;
+    border-radius: calc(0.5rem - 0.25rem);
+    background: none;
+    /* color: var(--secondary-color-5); */
+    cursor: pointer;
+    color: var(--white);
+}
+
+.renderLatex {
+    border-radius: 5px;
+    background-color: var(--white);
+}
+
+.varInput {
+    padding: 5px;
+    border-radius: 5px;
+    width: 25%;
+    height: 20%;
+    font-family: Firacode Nerd Font;
+    font-size: 16px;
+    box-sizing: border-box;
+    background-color: var(--white);
+}
+
+.exprInput {
+    padding: 15px;
+    border-radius: 5px;
+    width: 100%;
+    height: 20%;
+    font-family: Firacode Nerd Font;
+    font-size: 16px;
+    box-sizing: border-box;
+    background-color: var(--white);
+}
+
+.numberInput {
+    padding: 5px;
+    border-radius: 5px;
+    width: 60%;
+    height: 20%;
+    box-sizing: border-box;
+    font-size: 16;
+    background-color: var(--white);
+}
+
+.numberResult {
+    padding: 5px;
+    border-radius: 5px;
+    width: 80%;
+    height: 20%;
+    box-sizing: border-box;
+    background-color: var(--white);
+    font-size: 24;
+}
+
+.tokenList {
+    margin: 10px;
+}
+
+.errMsg {
+    font-family: Firacode Nerd Font;
+    font-size: 18px;
+    background-color: var(--white);
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.vstack {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    align-content: center;
+}
+
+.hstack {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    justify-items: flex-start;
+}
+
+.mermaid {
+    justify-content: "center";
+}
+
+
+.token {
+    font-weight: 700 ;
+    border-width:2px;
+    padding: 3px;
+    border-style:solid;
+    border-radius: 5px;
+    border-color:var(--brightBlack);
+}
+
+.opToken {
+    background-color: var(--yellow);
+    color: var(--foregroundColor);
+}
+.varToken {
+    background-color: var(--red);
+    color: var(--white);
+}
+.commonToken {
+    background-color: var(--cyan);
+    color: var(--foregroundColor);
+}
+.constToken {
+    background-color: var(--blue);
+    color: var(--white);
+}
+.funcToken {
+    background-color: var(--purple);
+    color: var(--white);
+}
+
+/* Mermaid node classes*/
+.mmdVar > rect {
+    fill: #ff0000;
+    stroke: var(--foregroundColor);
+    stroke-width: 4px;
+}
+.mmdConst > rect {
+    fill: #ff0000;
+    stroke: var(--foregroundColor);
+    stroke-width: 4px;
+}
+.mmdOp > rect {
+    fill: #ff0000;
+    stroke: var(--foregroundColor);
+    stroke-width: 4px;
+}
+.mmdFunc > rect {
+    fill: #ff0000;
+    stroke: var(--foregroundColor);
+    stroke-width: 4px;
+}

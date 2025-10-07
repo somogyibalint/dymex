@@ -1,16 +1,21 @@
-[package]
-name = "dymex"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+  "dymex",
+  "playground",
+]
 
-[dependencies]
-colored = "3.0"
-thiserror = "2.0.12"
-itertools = "*"
+resolver = "2"
 
-[dev-dependencies]
-assert_matches = "1.5"
 
-[features]
-default = []
-single_precision = []
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
