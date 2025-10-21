@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::rc::Rc;
 use std::slice::Iter;
-use thiserror::Error;
 use crate::{float, Float};
 
 pub const MAXDIM: usize = 3;
@@ -10,6 +9,8 @@ mod number;
 mod vector;
 mod eval;
 pub use eval::*;
+mod error;
+pub use error::*;
 
 pub enum DynVar<T: DynMath> {
     Number(Float),
@@ -35,55 +36,6 @@ impl Category {
 }
 
 pub type Unary = fn(Float) -> Float;
-
-#[derive(Error, Debug)]
-pub enum EvaluationError {
-    #[error("operation `{operation:?}` not supported between `{lhs:?}` and `{rhs:?}`")]
-    InvalidBinaryOperation {
-        operation: String,
-        lhs: String,
-        rhs: String,
-    },
-    #[error("operation `{operation:?}` not applicable to `{operand:?}`")]
-    InvalidUnaryOperation {
-        operation: String,
-        operand: String,
-    },
-
-    #[error("`{type_name:?}` has no field named `{field:?}`")]
-    InvalidField {
-        type_name: &'static str,
-        field: String,
-    },
-    #[error("invalid arguments for `{function:?}`: {details:?}")]
-    InvalidArguments {
-        function: String,
-        details: String
-    },
-    #[error("unknown error")]
-    Unknown,
-}
-
-/// Unimplemented binary operation `op` between `lhs` and `rhs`
-fn unimpl_binary(lhs: &str, rhs: &str, op: &str) -> Result<Box<dyn DynMath>, EvaluationError>
-{
-    Err(EvaluationError::InvalidBinaryOperation { 
-        operation: op.into(), 
-        lhs: lhs.into(), 
-        rhs: rhs.into() 
-    })
-}
-
-/// Unimplemented unary function that returns a number (min, max, sum ...)
-fn unimpl_unary<L>(data: &L, op: &str) -> Result<Float, EvaluationError>
-where
-    L: DynMath + ?Sized, 
-{
-    Err(EvaluationError::InvalidUnaryOperation { 
-        operation: op.into(), 
-        operand: data.type_name().into(), 
-    })
-}
 
 
 pub trait DynMath : Any {

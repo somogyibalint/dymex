@@ -8,8 +8,9 @@ edition = "2021"
 
 [dependencies]
 dymex = {path = "../dymex", version = "*"} 
-dioxus = { version = "^0.7.0-rc.0", features = [] }
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1" }
+dioxus = { version = "^0.7.0-rc.1", features = [] }
+# dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1" }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components" }
 
 
 

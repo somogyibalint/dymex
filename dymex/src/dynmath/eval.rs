@@ -18,7 +18,7 @@ pub struct Evaluator {
 impl Evaluator {
     pub fn new(expression: &str, variables: &[&str]) -> Result<Self, DymexError> {
         let mut ts = TokenStream::new();
-        if let Err(err) =  ts.update(expression, variables) {            
+        if let Err(err) =  ts.update(expression, variables) {
             return Err(DymexError::LexicalError(err))
         }
         let mut ast = AST::new(ts);
@@ -39,29 +39,39 @@ impl Evaluator {
     }
 
     pub fn evaluate(&mut self, inputs: &InputVars) -> Result<Box<dyn DynMath>, EvaluationError> {
-        for (varname, value) in inputs.as_hashmap().iter() {
-            let id = self.aliases.get(varname).unwrap();
-            self.values.insert(*id, value.clone());
-        };
+        for (varname, id) in &self.aliases {
+            if let Some(x) = inputs.as_hashmap().get(varname) {
+                self.values.insert(*id, x.clone());
+            } else {
+                return Err(EvaluationError::MissingInputVariable 
+                    {varname: varname.to_string()}
+                );
+            }
+        }
 
         let mut eval_order = self.expressions.keys()
             .copied()
             .collect::<Vec<u16>>();
         eval_order.sort_by(|a, b| b.cmp(a));
 
-        let final_result_id = eval_order.last().unwrap();
-        for expr_id in &eval_order {
-            let result = self.expressions[&expr_id].eval(&self.values);
-            match result {
-                Err(e) => return Err(e),
-                Ok(res) => {
-                    if expr_id == final_result_id {
-                        return Ok(Box::from(res))
+        if let Some(final_result_id) = eval_order.last() {
+            for expr_id in &eval_order {
+                let result = self.expressions[&expr_id].eval(&self.values);
+                match result {
+                    Err(e) => return Err(e),
+                    Ok(res) => {
+                        if expr_id == final_result_id {
+                            return Ok(Box::from(res))
+                        }
+                        self.values.insert(*expr_id, Rc::from(res)); 
                     }
-                    self.values.insert(*expr_id, Rc::from(res)); 
                 }
             }
+        } else {
+            // empty expression
+            return Ok(Box::from(float::NAN));
         }
+        
         panic!("ERROR: end of evaluation chain")
         // Ok(self.values[final_result_id].clone())
     }

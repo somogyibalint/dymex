@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use dymex::{DymexError, Token, TokenContext};
+use dioxus::html::OptionExtension;
+use dymex::{DymexError, Float, Token, TokenContext};
 use dymex::{Evaluator, InputVars, EvaluationError};
 
 pub fn float_formatter(f: Option<&f64>) -> String {
@@ -42,5 +43,12 @@ pub fn evaluate(expr: &str, var: &[String], values: HashMap<String, f64>) -> Res
     match eval.evaluate(&input) {
         Ok(x) => { Ok(x.as_number()) },
         Err(err) => Err(err)
+    }
+}
+
+pub fn format_num_result(x: Option<Float>) -> String {
+    match x {
+        Some(x) => format!("{:.4}", x),
+        None => " ⚠ ".to_string()
     }
 }

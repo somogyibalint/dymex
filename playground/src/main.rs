@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use dioxus::{prelude::*};
+use dioxus::logger::tracing::{Level, debug, error, info, warn};
 use dioxus_primitives::hover_card::{HoverCard, HoverCardTrigger, HoverCardContent};
 use dioxus_primitives::ContentSide;
 use dioxus_primitives::tabs::{Tabs, TabList, TabContent,TabTrigger};
@@ -70,10 +71,13 @@ fn App() -> Element {
     let mut tokens = use_signal(|| Vec::new());
     let mut valid_expression = use_signal(|| false);
 
-    let mut num_result = use_signal(|| f64::NAN);
+    let mut num_result = use_signal(|| Some(f64::NAN));
+    let num_result_formatted = use_memo(move || format_num_result(num_result()));
+
     // Handle updates to the expression and variable names
     use_effect(move || {
         valid_expression.set(false);
+        // info!("{}", valid_expression());
         let _v = variables();
         let varnames: Vec<&str> = _v.iter().map(|x| x.as_ref()).collect();
 
@@ -123,18 +127,22 @@ fn App() -> Element {
     // Update evaulated value 
     use_effect(move || {
         if !valid_expression() {
+            num_result.set(None);
             return;
         }
         match evaluate(
-            &raw_expression(), 
-            &variables(), 
-            input_values()
+            &raw_expression.peek(), 
+            &variables.peek(), 
+            input_values.peek().clone()
         ) {
             Ok(x) => {
-                num_result.set(x);
+                num_result.set(Some(x));
                 eval_msg.set("✓".to_string());
             },
-            Err(_) => {eval_msg.set("Eval error!".to_string())}
+            Err(err) => {
+                num_result.set(None);
+                eval_msg.set(format!("{}", err))
+            }
         }
     });
 
@@ -233,7 +241,7 @@ fn App() -> Element {
 
                         InputValues { variables, input_values }
                         span {class: "numberResult",
-                            {format!("{num_result:.4}")}
+                            {num_result_formatted}
                         }
                         pre {class: "errMsg", 
                             {eval_msg}
@@ -269,7 +277,7 @@ fn App() -> Element {
 fn InputList(mut variables: Signal<Vec<String>>) -> Element {
     rsx!{
         h3 {"Variables"}
-        for (i, _) in variables.iter().enumerate() {
+        for (i, varname) in variables.iter().enumerate() {
             div { 
                 class: "hstack",
                 input {
@@ -279,7 +287,8 @@ fn InputList(mut variables: Signal<Vec<String>>) -> Element {
                         variables.write()[i] = event.value();
                     }
                 }
-                button { id: "X{i}", "×"}
+                button { id: "var{i}_{varname}" ,
+                 "×"}
             }
         }
         button { id: "add", onclick: move |_| variables.push("Name".to_string()), "New variable" }
