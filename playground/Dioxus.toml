@@ -12,10 +12,12 @@ title = "Dymex Playground"
 style = []
 
 # Additional JavaScript files
-script = []
+script = [
+]
 
 [web.resource.dev]
 
 # Javascript code file
 # serve: [dev-server] only
+# Javascript code file
 script = []

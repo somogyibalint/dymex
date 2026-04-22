@@ -12,6 +12,7 @@ mod mermaid;
 pub use mermaid::*;
 
 /// Abstract syntax tree
+#[derive(Clone)]
 pub struct AST {
     ts: TokenStream,
     pub tree: Option<Branch>
@@ -60,7 +61,7 @@ impl AST {
             0 => Ok(()),
             _ => Err(ParsingError::MissingRP(n))
         }
-    } 
+    }
 
     fn check_tokens(&self) -> Result<(), ParsingError> {
         for tc in &self.ts.tokens {
@@ -104,7 +105,7 @@ impl AST {
 }
 
 
-/// Resursive data structure for the AST 
+/// Resursive data structure for the AST
 /// Lisp S-expression representing the AST atom: number, constant or input variable
 /// Expression: an operation (head) and the operands (sub-branches)
 #[derive(Debug, PartialEq, Clone)]
@@ -168,14 +169,14 @@ impl Branch {
         s.clone()
     }
 
-    
+
 }
 
 
 /// This function build the AST from the provided TokenStream
 fn parse_tokenstream(ts: &mut TokenStream) -> Result<Branch, ParsingError> {
     pratt_parser(ts, 0)
-} 
+}
 
 /// Pratt-parser inspired by: matklad's "Simple but Powerful Pratt Parsing"
 /// See: https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
@@ -192,7 +193,7 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
             let res = pratt_parser(ts, 0);
             match res {
                 Ok(lhs) if ts.next().token == Token::RP =>  lhs,
-                Ok(_) => return Err(ParsingError::MissingRP(1)), // ! FIXME: 
+                Ok(_) => return Err(ParsingError::MissingRP(1)), // ! FIXME:
                 Err(e) => return Err(e),
             }
         }
@@ -208,14 +209,14 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
                     Ok(arg) => {args.push(arg)},
                     Err(e) => {return Err(e);}
                 }
-                let next = ts.next(); 
+                let next = ts.next();
                 match next.token {
                     Token::RP => { break; },
                     Token::Comma => {},
                     _ => return Err(ParsingError::UnexpectedToken(next.at))
                 };
             }
-            if args.len() == 0 { 
+            if args.len() == 0 {
                 return Err(ParsingError::MissingArgument(next.at));
             }
             Branch::Expression(next.clone(), args)
@@ -224,13 +225,13 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
         // operator -> recursion
         _=> {
             if let Some((_, r_bp)) = prefix_precedence(&next.token) {
-                let try_rhs = pratt_parser(ts, r_bp); 
+                let try_rhs = pratt_parser(ts, r_bp);
                 match try_rhs {
                     Ok(rhs) => return Ok(Branch::Expression(next, vec![rhs])),
                     Err(err) => return Err(err)
                 }
             } else {
-                return Err(ParsingError::UnexpectedToken(next.at)); // prefix operator that is not + - 
+                return Err(ParsingError::UnexpectedToken(next.at)); // prefix operator that is not + -
             }
         }
     };
@@ -239,13 +240,13 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
         let peeked = ts.peek();
         let op = match peeked.token.clone() {
             Token::Eof => break,
-            Token::Number(_) | Token::Const(_) | Token::Var(_) => 
+            Token::Number(_) | Token::Const(_) | Token::Var(_) =>
                 return Err(ParsingError::UnexpectedToken(peeked.at)),
             t => t,
         };
 
         // postfix
-        if let Some((l_bp, _)) = postfix_precedence(&op) { 
+        if let Some((l_bp, _)) = postfix_precedence(&op) {
             if l_bp < min_precedence {
                 break;
             }
@@ -275,16 +276,16 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
             } else {
                 return Err(ParsingError::UnexpectedToken(peeked.at));
             };
-            continue;    
+            continue;
         }
         break;
     }
     Ok(lhs)
-} 
+}
 
 // Field expressions: left to right
-// Function calls, array indexing	
-// ** 
+// Function calls, array indexing
+// **
 // * / %	left to right
 // + -	left to right binary and unary
 // == != < > <= >=	Require parentheses
@@ -338,7 +339,7 @@ fn is_atom(t: & Token) -> bool {
 
 
 /// Non-recursive representation of the AST
-/// 
+///
 pub struct FlatAst {
     nodes: HashMap<u8, TokenContext>,
     edges: HashMap<u8, u8>,
@@ -353,9 +354,9 @@ impl FlatAst {
         }
     }
     fn add_node(&mut self, tc: TokenContext, parent: u8) -> u8 {
-        let id = self.node_id; 
+        let id = self.node_id;
         self.nodes.insert(id, tc);
-        self.node_id += 1;        
+        self.node_id += 1;
         self.add_edge(parent, id);
         id
     }
@@ -449,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_simple_functions() {
-        test_parsing("max(0, sqrt(min(1,2,3,4)))", &vec![], "(Max: 0, (Sqrt: (Min: 1, 2, 3, 4)))");   
+        test_parsing("max(0, sqrt(min(1,2,3,4)))", &vec![], "(Max: 0, (Sqrt: (Min: 1, 2, 3, 4)))");
     }
 
     #[test]
@@ -459,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_get_field() {
-        test_parsing("r.x - x0", &vec!["r", "x0"], "(-: (.: r, x), x0)");   
+        test_parsing("r.x - x0", &vec!["r", "x0"], "(-: (.: r, x), x0)");
     }
 
     #[test]

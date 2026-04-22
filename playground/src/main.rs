@@ -1,12 +1,26 @@
 use std::collections::HashMap;
+use charming::element::Symbol;
+use indexmap::{IndexMap};
+use std::env::consts::FAMILY;
+use std::env::var;
 
 use dioxus::{prelude::*};
 use dioxus::logger::tracing::{Level, debug, error, info, warn};
 use dioxus_primitives::hover_card::{HoverCard, HoverCardTrigger, HoverCardContent};
 use dioxus_primitives::ContentSide;
 use dioxus_primitives::tabs::{Tabs, TabList, TabContent,TabTrigger};
+use dioxus_elements::keyboard_types::Key;
 
-use dymex::{styled_ast_graph, MermaidStyle, MermaidStyleEnum, TokenContext, TokenStream, AST};
+use charming::{
+    component::Axis,
+    element::{AxisType, JsFunction, Tooltip},
+    series::Line,
+    Chart, WasmRenderer,
+};
+
+use dymex::{AST, Category, EvaluationError, Evaluator, InputVars, MermaidStyle, MermaidStyleEnum, Token, TokenContext, TokenStream, styled_ast_graph};
+use dymex::DynMath;
+use std::rc::Rc;
 use dymex::Latex;
 
 static CSS: Asset = asset!("/assets/style.css");
@@ -14,12 +28,17 @@ static CSS: Asset = asset!("/assets/style.css");
 // static START_EXPR: &str = "(1-R)^2 / (1 - 2*R*cos(4*pi*n*d*cos(theta) / lambda) + R^2)";
 // static START_VAR: [&str; 5] = ["lambda", "n","d", "theta", "R"];
 
-static START_EXPR: &str = "1 / (1 + exp((E - E_f) / (k_b * T)))";
-static START_VAR: [&str; 4] = ["E", "E_f","k_b", "T"];
-static START_VAL: [f64; 4] = [0.2, 0.0, 8.617333262E-5, 297.0];
+const START_EXPR: &str = "1 / (1 + exp((E - E_f) / (k_b * T)))";
+const START_VAR: [&str; 4] = ["E", "E_f","k_b", "T"];
+const START_VAL: [&str; 4] = ["0.2", "0.0", "8.617333262E-5", "297.0"];
+
+const DEFAULTVALUE: &str = "-1";
 
 mod helpers;
 use helpers::*;
+mod eval;
+use eval::*;
+
 
 
 
@@ -45,52 +64,68 @@ fn App() -> Element {
     };
 
     let mut tokenstream =  TokenStream::new();
+    // let mut evaluator =  EvaluatorAdapter::new();
 
     let raw_expression = use_signal(|| START_EXPR.to_string());
-    let variables = use_signal(|| 
-        START_VAR
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect::<Vec<String>>()
-    );
+    // let variables = use_signal(||
+    //     START_VAR
+    //     .iter()
+    //     .map(|s| (*s).to_string())
+    //     .collect::<Vec<String>>()
+    // );
 
-    let name_value: HashMap<String, f64> = START_VAR
+    let variables : IndexMap<String, VarData> = START_VAR
         .into_iter()
         .zip(START_VAL.into_iter())
         .map(|(key, value)| {
-            return (key.to_string(), value);
+            return (key.to_string(), VarData::from_text(value));
         }).collect();
-    let input_values = use_signal(|| name_value );
+    let variables = use_signal(|| variables );
+    let mut referenced_variables: Signal<Vec<String>> = use_signal(|| START_VAR.iter().map(|s| s.to_string()).collect());
+    let mut evaluator: Signal<Option<Evaluator>> = use_signal(|| None);
 
     let mut lexer_msg = use_signal(|| "".to_string());
     let mut parser_msg = use_signal(|| "".to_string());
     let mut eval_msg = use_signal(|| "".to_string());
+    let mut debug_msg = use_signal(|| "".to_string());
+
     let mut mermaid_script = use_signal(|| "".to_string());
     let mut mermaid_innerHTML = use_signal(|| "".to_string());
     let mut latex_tex = use_signal(|| "".to_string());
     let mut tokens = use_signal(|| Vec::new());
     let mut valid_expression = use_signal(|| false);
+    let mut show_graph= use_signal(|| false);
+
 
     let mut num_result = use_signal(|| Some(f64::NAN));
+    let mut vec_result: Signal<Option<Vec<f64>>> = use_signal(|| None);
+    let mut x_axis: Signal<Option<Vec<f64>>> = use_signal(|| None);
     let num_result_formatted = use_memo(move || format_num_result(num_result()));
+
+
 
     // Handle updates to the expression and variable names
     use_effect(move || {
         valid_expression.set(false);
         // info!("{}", valid_expression());
-        let _v = variables();
-        let varnames: Vec<&str> = _v.iter().map(|x| x.as_ref()).collect();
+        // TODO: find better way
+        let _v = variables.read();
+        let varnames: Vec<&str> = _v.iter().map(|(k, _)| k.as_ref()).collect();
 
         // lexing
-        let lexer_result = tokenstream.update(&raw_expression(),&varnames); 
+        let lexer_result = tokenstream.update(&raw_expression(), &varnames);
         lexer_msg.set(
             match &lexer_result {
                 Ok(_) => "✓".to_string(),
                 Err(err) => err.user_message().full_message(&raw_expression())
             }
         );
+        if let Ok(_) = lexer_result {
+            let varnames = tokenstream.variable_names();
+            referenced_variables.set(varnames);
+        }
         tokens.set(tokenstream.tokens.clone());
-        
+
         // parsing
         if let Ok(_) = lexer_result {
             let mut ast = AST::new(tokenstream.clone());
@@ -98,10 +133,10 @@ fn App() -> Element {
             match ast.parse_tokens() {
                 Ok(_) => {
                     parser_msg.set("✓".to_string());
-                    if let Some(branch) = ast.tree {
-                        mermaid_script.set(styled_ast_graph(&branch, &mmd_style));
-                        latex_tex.set(format!("{}", &branch.latex()));
-                        valid_expression.set(true)
+                    if let Some(branch) = &ast.tree {
+                        mermaid_script.set(styled_ast_graph(branch, &mmd_style));
+                        latex_tex.set(format!("{}", branch.latex()));
+                        valid_expression.set(true);
                     }
                 },
                 Err(err) => {
@@ -109,6 +144,11 @@ fn App() -> Element {
                     mermaid_script.set("".to_string());
                     latex_tex.set("".to_string());
                 }
+            }
+            if valid_expression() {
+                evaluator.set(Some(Evaluator::from_ast(ast)));
+            } else {
+                evaluator.set(None);
             }
         } else {
             parser_msg.set("".to_string());
@@ -124,38 +164,135 @@ fn App() -> Element {
         );
     });
 
-    // Update evaulated value 
+
+    // Update evaluated value
     use_effect(move || {
         if !valid_expression() {
             num_result.set(None);
             return;
         }
-        match evaluate(
-            &raw_expression.peek(), 
-            &variables.peek(), 
-            input_values.peek().clone()
-        ) {
-            Ok(x) => {
-                num_result.set(Some(x));
-                eval_msg.set("✓".to_string());
-            },
-            Err(err) => {
-                num_result.set(None);
-                eval_msg.set(format!("{}", err))
+
+        // collect the values of referenced variables
+        let mut input = InputVars::new();
+        for name in referenced_variables.read().iter() {
+            if let Some(var)= variables.read().get(name) {
+                match &var.value {
+                    Some(value) => {
+                        input.insert_ref(name.clone(), Rc::clone(value));
+                    },
+                    None => {return}
+                }
+            } else {
+                return
             }
         }
+        // debug
+        debug_msg.set("".to_string());
+        for (k , v) in input.iter() {
+            match v.category() {
+                Category::Number => {
+                    debug_msg.write().push_str(&format!("{:?}: {:?}\n", k, v.as_number())); //DEBUG
+                }
+                Category::Array => {
+                    let v = v.as_any().downcast_ref::<Vec<f64>>().unwrap().to_vec();
+                    debug_msg.write().push_str(&format!("{:?}: {:?}..{:?}\n", k, v[0], v[v.len()-1])); //DEBUG
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(mut eval) = evaluator() {
+            match eval.evaluate(&input) {
+                Ok(x) => {
+                    eval_msg.set("✓".to_string());
+                    debug_msg.write().push_str(&format!("result: {:?}", x.category())); //DEBUG
+                    match x.category() {
+                        Category::Number => {
+                            num_result.set(Some(x.as_number()));
+                            vec_result.set(None);
+                            show_graph.set(false);
+                        },
+                        Category::Array => {
+                            let v = x.as_any().downcast_ref::<Vec<f64>>().unwrap().to_vec();
+                            num_result.set(None);
+                            vec_result.set(Some(v));
+                            show_graph.set(true);
+                        },
+                        _ => {}
+                    }
+                },
+                Err(err) => {
+                    num_result.set(None);
+                    vec_result.set(None);
+                    eval_msg.set(format!("{}", err));
+                }
+            };
+        }
+
     });
+
+
+    // charming
+    let renderer = use_signal(|| WasmRenderer::new(600, 400));
+    use_effect(move || {
+        // let mut series = Vec::new();
+        // let mut xaxis = Vec::new();
+        // let mut yaxis = Vec::new();
+        let (xax, yax) = match vec_result() {
+            Some(yax) => {
+                match x_axis() {
+                    Some(xax) => (xax, yax),
+                    None => (yax.iter().enumerate().map(|(i, _)| i as f64).collect(), yax)
+                }
+            }
+            None => return,
+        };
+        let series = xax.iter().zip(yax.iter()).map(|(x, y)|vec![*x, *y]).collect::<Vec<Vec<f64>>>();
+
+        let chart = Chart::new()
+                .tooltip(Tooltip::new().formatter(JsFunction::new_with_args(
+                "params",
+                r#"
+                    var tooltip = "Value: ".concat(String(params.value));
+                    return tooltip;
+                "#,
+            )))
+            .x_axis(Axis::new().type_(AxisType::Value))
+            .y_axis(Axis::new())
+            .series(Line::new().symbol(Symbol::None).data(series));
+        renderer.read_unchecked().render("chart", &chart).unwrap();
+    });
+
+
+    let result_display = match show_graph() {
+        false => { rsx! {
+            div {
+                width: "40%",
+                span {
+                    class: "numberResult",
+                    {num_result_formatted}
+                    }
+                }
+            }
+        },
+        true => { rsx! {
+            div {
+                width: "100%",
+                div {
+                    id: "chart",
+                    style: "display: inline-block;"
+                }
+            }
+        }},
+    };
 
     rsx! {
         document::Stylesheet { href: CSS }
-        
+
 
         div { id: "title",
             text_align: "center",
             h1 { "Dymex playground" }
-        }
-        div { id: "latexOutput",
-            class: "renderLatex"
         }
 
         Tabs {
@@ -166,13 +303,69 @@ fn App() -> Element {
             TabList {
                 justify_content: "center",
                 class: "tabs-list",
-                TabTrigger { class: "tabs-trigger", value: "tab1".to_string(), index: 0usize, "Parse" }
-                TabTrigger { class: "tabs-trigger", value: "tab2".to_string(), index: 1usize, "Eval" }
-                TabTrigger { class: "tabs-trigger", value: "tab3".to_string(), index: 2usize, "Docs" }
+                TabTrigger { class: "tabs-trigger", value: "tab1".to_string(), index: 0usize, "Calculator" }
+                TabTrigger { class: "tabs-trigger", value: "tab5".to_string(), index: 5usize, "Debug" }
+                TabTrigger { class: "tabs-trigger", value: "tab6".to_string(), index: 6usize, "Tab2" }
+                TabTrigger { class: "tabs-trigger", value: "tab7".to_string(), index: 7usize, "Tab3" }
             }
-            TabContent { 
-                index: 0usize, 
+            TabContent {
+                index: 0usize,
                 value: "tab1".to_string(),
+                div {
+                    id: "calculator",
+                    width: "80%",
+                    display: "flex",
+                    flex_direction: "column",
+                    justify_content: "center",
+                    div {
+                        id: "calculator_inputs",
+                        width: "100%",
+                        display: "flex",
+                        flex_direction: "row",
+                        align_items: "start",
+                        justify_content: "center",
+                        div {
+                            width: "60%",
+                            ExpressionInput { raw_expression }
+                        }
+                        div {
+                            width: "40%",
+                            InputList { variables }
+                        }
+                    }
+                    div {
+                        id: "calculator_results",
+                        width: "100%",
+                        display: "flex",
+                        flex_direction: "row",
+                        align_items: "start",
+                        justify_content: "center",
+                        div {
+                            width: "60%",
+                            div {
+                                id: "latexOutput",
+                                class: "renderLatex"
+                            }
+                        }
+
+                    }
+                    div {
+                        {result_display}
+                    }
+
+                    div {
+                        hidden:"true",
+                        h3 {"Console"}
+                        pre {class: "errMsg",
+                            {debug_msg}
+                        }
+                    }
+                }
+            }
+
+            TabContent {
+                index: 5usize,
+                value: "tab5".to_string(),
                 div {
                     width: "100%",
                     // height: "5rem",
@@ -190,19 +383,19 @@ fn App() -> Element {
                             display: "flex",
                             flex_direction: "column",
                             justify_content: "center",
-                            div { ExpressionInput { raw_expression } }
+                            // div { ExpressionInput { raw_expression } }
                             div { InputList { variables } }
                             div { LexerOutput {tokens, lexer_msg} }
                             div {
                                 h3 {"Parser"}
-                                pre {class: "errMsg", 
+                                pre {class: "errMsg",
                                     {parser_msg}
                                 }
                             }
                             div { class: "renderLatex",
                                 display: "none",
                                 pre { id: "latexInput",
-                                {latex_tex}} 
+                                {latex_tex}}
                             }
                         }
                         div {id: "parse_rightcol",
@@ -213,8 +406,6 @@ fn App() -> Element {
                             h3 {text_align: "center", "Syntax Tree"}
                             div {id: "mermaid-div",
                                 justify_content: "center",
-                                display: "flex",
-                                flex_direction: "row",
                                 dangerous_inner_html: "{mermaid_innerHTML}"
                             }
                         }
@@ -222,9 +413,9 @@ fn App() -> Element {
                 }
             }
             TabContent {
-                index: 1usize,
+                index: 6usize,
                 class: "tabs-content",
-                value: "tab2".to_string(),
+                value: "tab6".to_string(),
                 div {
                     width: "100%",
                     display: "flex",
@@ -239,11 +430,11 @@ fn App() -> Element {
                         flex_direction: "column",
                         align_items: "start",
 
-                        InputValues { variables, input_values }
-                        span {class: "numberResult",
-                            {num_result_formatted}
-                        }
-                        pre {class: "errMsg", 
+                        // InputValues { variables, input_values }
+                        // span {class: "numberResult",
+                        //     {num_result_formatted}
+                        // }
+                        pre {class: "errMsg",
                             {eval_msg}
                         }
                         // InputValDebug { input_values }
@@ -258,7 +449,7 @@ fn App() -> Element {
                     // }
                 }
             }
-            TabContent { index: 2usize, value: "tab3".to_string(),
+            TabContent { index: 7usize, value: "tab7".to_string(),
                 div {
                     width: "100%",
                     height: "5rem",
@@ -268,32 +459,112 @@ fn App() -> Element {
                     "LOL good one!"
                 }
             }
+
         }
     }
 }
 
 
 #[component]
-fn InputList(mut variables: Signal<Vec<String>>) -> Element {
+fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
     rsx!{
         h3 {"Variables"}
-        for (i, varname) in variables.iter().enumerate() {
-            div { 
-                class: "hstack",
-                input {
-                    class: "varInput",
-                    value: variables.read()[i].clone(),
-                    oninput: move |event: Event<FormData>|  { 
-                        variables.write()[i] = event.value();
-                    }
-                }
-                button { id: "var{i}_{varname}" ,
-                 "×"}
+        for (var_name, _) in variables().into_iter() {
+            div {
+                InputElement {variables: variables, var_name: var_name}
             }
         }
-        button { id: "add", onclick: move |_| variables.push("Name".to_string()), "New variable" }
+        button {
+            class: "add_variable",
+            onclick: move |_| {
+                for i in 1..100 {
+                    let name = format!("var{i}");
+                    if !variables.read().contains_key(&name) {
+                        variables.write().insert(name, VarData{text: "1".to_string(), value: Some(Rc::new(1.0f64))});
+                        break;
+                    }
+                }
+            },
+        "New variable"
+        }
     }
 }
+
+#[component]
+fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: String)  -> Element {
+    // TODO: how to get rid of these clones???
+    let v1 = var_name.clone();
+    let v2 = var_name.clone();
+    let v3 = var_name.clone();
+    let v4 = var_name.clone();
+
+    let mut buffer =  use_signal(|| variables.read().get(&var_name).unwrap().text.clone());
+    let value_input = match variables.read().get(&var_name).unwrap().value {
+        None => "invalidValueText",
+        _ => "validValueText",
+    };
+
+    rsx!{
+        div {
+            class: "hstack",
+            input {
+                class: "varInput",
+                value: var_name.clone(),
+                oninput: move |event: Event<FormData>| {
+                    let new_name = event.value();
+                    if new_name == var_name {
+                        // do nothing
+                    } else {
+                        let mut new_map : IndexMap<String, VarData> = IndexMap::new();
+                        match variables.read().contains_key(&new_name) {
+                            true => { }, //TODO: emit warning?
+                            false => {
+                                for (name, data) in variables().into_iter() {
+                                    if name == v1 {
+                                        new_map.insert(new_name.clone(), data.clone());
+                                    } else {
+                                        new_map.insert(name.clone(), data.clone());
+                                    }
+                                }
+                            },
+                        }
+                        variables.set(new_map);
+                    }
+                }
+            }
+            input {
+                class: value_input,
+                type: "text",
+                step: "any",
+                //value: input_formatter(variables.read().get(&v2).unwrap().text.as_ref()), // !unwrap
+                value: variables.read().get(&v2).unwrap().text.clone(),
+                onkeypress: move |event: KeyboardEvent| {
+                    match event.key() {
+                        Key::Enter | Key::Tab => {
+                            let new_text = buffer.peek().clone();
+                            let value = parse_variable_value(&new_text);
+                            variables.write().insert(v2.clone(), VarData { text: new_text, value });
+                        },
+                        _ => {}
+                    }
+                },
+                oninput: move |event: Event<FormData>| {
+                    buffer.set(event.value());
+                    variables.write().insert(v3.clone(), VarData { text: event.value(), value: None });
+                    buffer.set(event.value());
+                }
+            }
+            button {
+                class: "remove_variable",
+                onclick: move |_| {
+                    variables.write().shift_remove(&v4);
+                },
+                "×"
+            }
+        }
+    }
+}
+
 
 #[component]
 fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
@@ -301,7 +572,7 @@ fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
         h3 {"Expression"}
         input {class: "exprInput",
             value: "{raw_expression}",
-            oninput: move |event: Event<FormData>|  { 
+            oninput: move |event: Event<FormData>|  {
                 raw_expression.set(event.value());
             }
         }
@@ -317,7 +588,7 @@ fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> 
             for t in tokens() {
                 HoverCard {
                     HoverCardTrigger {
-                        span { class:token_style(&t), 
+                        span { class:token_style(&t),
                         { format!("{}", t.token)} }
                     }
                     HoverCardContent { side: ContentSide::Bottom,
@@ -326,57 +597,22 @@ fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> 
                 }
             }
         }
-        pre {class: "errMsg", 
+        pre {class: "errMsg",
             {lexer_msg}
         }
     }
 }
 
-#[component]
-fn InputValues(
-    variables: Signal<Vec<String>>, 
-    input_values: Signal<HashMap<String, f64>> 
-) -> Element {
-    rsx! {
-        div {
-            class: "vstack",
-            h3 {"Input values"}
-            div {
-                class: "vstack",
 
-                for varname in variables().into_iter() {
-                    div {
-                        padding: "3px", 
-                        class: "hstack",
-                        label { text_align: "center", width: "30%", "{varname}" }
-
-                        input {
-                            class: "numberInput",
-                            type: "number",
-                            step: "any",
-                            value: float_formatter(input_values.read().get(&*varname)),
-                            oninput: move |event: Event<FormData>|  { 
-                                input_values.write().insert(
-                                    varname.to_string(),
-                                    event.value().parse::<f64>().unwrap()
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 #[component]
 fn InputValDebug(
-    input_values: Signal<HashMap<String, f64>> 
+    input_values: Signal<HashMap<String, f64>>
 ) -> Element {
     let mut text = String::new();
     for (k, v) in input_values.read().iter() {
         text.push_str(&format!("{} = {} \n", k, v));
-    } 
+    }
     rsx!{
         pre {
             padding: "20px",

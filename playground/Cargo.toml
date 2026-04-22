@@ -7,12 +7,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dymex = {path = "../dymex", version = "*"} 
+dymex = {path = "../dymex", version = "*"}
 dioxus = { version = "^0.7.0-rc.1", features = [] }
 # dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1" }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components" }
-
-
+charming = { version = "0.6.0", features = ["wasm"] }
+indexmap = {version = "*"}
 
 [features]
 default = ["web"]
@@ -31,3 +31,4 @@ inherits = "dev"
 
 [profile.android-dev]
 inherits = "dev"
+

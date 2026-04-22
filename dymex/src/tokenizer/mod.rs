@@ -1,6 +1,6 @@
 /// Turn an expression string a stream of tokens
 ///
-///  
+///
 
 use crate::Float;
 
@@ -19,7 +19,7 @@ const FORBIDDEN_IDS: [&str; 19] = ["min", "max", "avg", "mean", "std", "sin", "c
 
 /// A token with additional context. The position in the original expression
 /// and the length of the string representation is stored in `at` and `len`.
-/// As `at` is unique for each token, it also serves as an ID.  
+/// As `at` is unique for each token, it also serves as an ID.
 #[derive(Debug, PartialEq, Clone)]
 pub struct TokenContext {
     pub token: Token,
@@ -39,7 +39,7 @@ impl TokenContext {
 
 
 /// Contains the original expression, the list of variable keys and the list
-/// of tokens in normal (for debugging) and reversed (for parsing) order. 
+/// of tokens in normal (for debugging) and reversed (for parsing) order.
 #[derive(Debug, PartialEq, Clone)]
 pub struct TokenStream {
     pub tokens: Vec<TokenContext>,
@@ -73,21 +73,36 @@ impl TokenStream {
 
     pub fn next(&mut self) -> TokenContext {
         self.tokens_reversed.pop().unwrap_or(self.eof())
-    } 
+    }
 
     pub fn peek(&mut self) -> TokenContext {
         self.tokens_reversed.last().cloned().unwrap_or(self.eof())
     }
 
     /// Update the expression and variable keys, tokenize the expression if changed
-    pub fn update(&mut self, expression: &str, variables: &[&str] ) 
+    pub fn update(&mut self, expression: &str, variables: &[&str] )
     -> Result<(), TokenizerError> {
         // maybe save last Err so we can return it:
-        // if self.expr == expression && self.var == variables {return ???}  
+        // if self.expr == expression && self.var == variables {return ???}
 
         self.expr = expression.into();
         self.var = variables.iter().copied().map(|s| s.into()).collect();
         self.tokenize()
+    }
+
+    /// Return the names of the variables referenced in the expression
+    /// This is a subset of the list of input variables
+    pub fn variable_names(&self) -> Vec<String> {
+        let mut vars = Vec::new();
+        for tc in &self.tokens {
+            match &tc.token {
+                Token::Var(varname) => {
+                    vars.push(varname.to_string())
+                },
+                _ => {}
+            }
+        }
+        vars
     }
 
     fn tokenize(&mut self) -> Result<(), TokenizerError> {
@@ -114,14 +129,14 @@ impl TokenStream {
 pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
 
     if let Err(e) = check_input_variables(variables) { return Err(e); }
-    if let Err(e) = check_illegal_characters(input) { return Err(e); } 
-    
+    if let Err(e) = check_illegal_characters(input) { return Err(e); }
+
     let mut res: Vec<TokenContext> = vec![];
     let mut cursor = 0;
 
     let expression = input.chars().collect::<Vec<char>>();
 
-    //    if let Some(next) = input.chars().nth(cursor) {
+    // if let Some(next) = input.chars().nth(cursor) {
     // let nextnext = input.chars().nth(cursor+1).unwrap_or(' ');
     loop {
         if let Some(next) = expression.get(cursor) {
@@ -129,7 +144,7 @@ pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenConte
             if next.is_whitespace() {
                 cursor +=1;
             } else if next.is_alphabetic() || *next == '_' {
-                match parse_identifier(&expression[cursor..], cursor, variables, res.last()) { 
+                match parse_identifier(&expression[cursor..], cursor, variables, res.last()) {
                     Ok((t, wordsize)) => {
                         res.push(TokenContext { token: t, at: cursor, len: wordsize });
                         cursor += wordsize;
@@ -139,7 +154,7 @@ pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenConte
                         return Err(e);
                     }
                 }
-            } else if next.is_ascii_digit() 
+            } else if next.is_ascii_digit()
                 || (next == &'-' && nextnext.is_ascii_digit() ) {
                 if let Some((t, wordsize)) = parse_number(&expression[cursor..]) {
                     res.push(TokenContext { token: t, at: cursor, len: wordsize });
@@ -147,7 +162,7 @@ pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenConte
                     continue;
                 } else {
                     return Err(TokenizerError::InvalidNumberFormat(cursor));
-                } 
+                }
             } else if SPECIAL_CHARS.contains(*next) {
                 if let Some((t, advance)) = parse_special_characters(*next, *nextnext) {
                     res.push(TokenContext { token: t, at: cursor, len: advance });
@@ -156,7 +171,7 @@ pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenConte
                 } else {
                     return Err(TokenizerError::SyntaxError(cursor))
                 }
-            } else {  
+            } else {
                 return Err(TokenizerError::InvalidCharacter(*next, cursor));
             }
         } else {
@@ -204,7 +219,7 @@ fn parse_special_characters(c1: char, c2: char) -> Option<(Token, usize)> {
         return Some((t, 1));
     }
     None
-} 
+}
 
 /// Parse single 'special' character token
 fn parse_single_char_token(c: char) -> Option<Token> {
@@ -262,7 +277,7 @@ pub(super) fn parse_number(s: &[char]) -> Option<(Token, usize)> {
             }
             ('.', 1, _) => {
                 return None;
-            }            
+            }
             ('e', _, 1) | ('E', _, 1) => {
                 return None;
             }
@@ -270,7 +285,7 @@ pub(super) fn parse_number(s: &[char]) -> Option<(Token, usize)> {
 
             }
             // special case for E-1
-            ('-' | '+', _, _) if after_exp => { 
+            ('-' | '+', _, _) if after_exp => {
                 after_exp = false;
             }
             // allow for 1E6 = 1_000_000
@@ -302,13 +317,13 @@ fn is_ident_char(c: char) -> bool {
 }
 
 /// Parses an identifier returning a function, constant, or user-defined
-/// variable, or UndefinedVariable error. The `start` parameter is only 
-/// needed for error reporting. The previous token needs to be provided 
-/// to allow `a.b` even if `b` is not a user defined variable. 
+/// variable, or UndefinedVariable error. The `start` parameter is only
+/// needed for error reporting. The previous token needs to be provided
+/// to allow `a.b` even if `b` is not a user defined variable.
 fn parse_identifier(
-    s: &[char], 
-    start:usize, 
-    vars: &[&str], 
+    s: &[char],
+    start:usize,
+    vars: &[&str],
     previous: Option<&TokenContext>
     ) -> Result<(Token, usize), TokenizerError> {
     let id_chars = match s.iter()
@@ -333,12 +348,12 @@ fn parse_identifier(
 fn parse_variable(
     word: &str,
     start: usize,
-    vars: &[&str], 
+    vars: &[&str],
     prev: Option<&TokenContext>
     ) -> Result<Token, TokenizerError> {
     // special case for fields: for `a.b`, only `a` needs to be a variable keys,
     // the existence of `b` can only be checked during evaluation.
-    let after_dot = if let Some(prev_tc) = prev 
+    let after_dot = if let Some(prev_tc) = prev
     && prev_tc.token == Token::Dot { true } else { false};
 
     match (after_dot, vars.contains(&word)) {
@@ -410,7 +425,7 @@ mod tests {
         assert_eq!(check_input_variables(&["pi"]), Err(TokenizerError::InvalidVariableName("pi".into(), VARNAME_ERR1)));
         assert_eq!(check_input_variables(&["ip"]), Ok(()));
     }
-    
+
     // TODO: move to err
     #[test]
     fn test_characters() {
@@ -445,11 +460,11 @@ mod tests {
         let id = &charslice("center*5");
         let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Var("center".into()), 6)));
-        
+
         let id = &charslice("pi^2");
         let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 2)));
-        
+
         let id = &charslice("π^2");
         let res = parse_identifier(id, start, &input_vars, None);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 1)));
@@ -466,11 +481,11 @@ mod tests {
         let expr2 = "(2.0*pi*exp(-x*x))/max(1.0+sqrt(y),0)";
         let expr3 = "(2.0 * pi *exp( -x * x)) / max(1.0 + sqrt(y), 0)   ";
 
-        let target = &[Token::LP, Token::Number(2.0), Token::ArOp(ArithmeticOperator::Mul), 
-        Token::Const(Constant::Pi), Token::ArOp(ArithmeticOperator::Mul), Token::Func(Function::Exp, 1), 
+        let target = &[Token::LP, Token::Number(2.0), Token::ArOp(ArithmeticOperator::Mul),
+        Token::Const(Constant::Pi), Token::ArOp(ArithmeticOperator::Mul), Token::Func(Function::Exp, 1),
         Token::LP, Token::ArOp(ArithmeticOperator::Minus), Token::Var("x".into()), Token::ArOp(ArithmeticOperator::Mul),
-        Token::Var("x".into()), Token::RP, Token::RP, Token::ArOp(ArithmeticOperator::Div), Token::Func(Function::Max, 64), 
-        Token::LP, Token::Number(1.0), Token::ArOp(ArithmeticOperator::Plus), Token::Func(Function::Sqrt, 1), 
+        Token::Var("x".into()), Token::RP, Token::RP, Token::ArOp(ArithmeticOperator::Div), Token::Func(Function::Max, 64),
+        Token::LP, Token::Number(1.0), Token::ArOp(ArithmeticOperator::Plus), Token::Func(Function::Sqrt, 1),
         Token::LP, Token::Var("y".into()), Token::RP, Token::Comma, Token::Number(0.0), Token::RP];
 
         let res1 = tokenize(expr1, input_var).unwrap();
@@ -486,9 +501,9 @@ mod tests {
         let input_var = &["spectrum"];
         let expr = "spectrum.x[-1] - spectrum.x[0]";
         let res = tokenize(expr, input_var).unwrap();
-        let target = &[Token::Var("spectrum".into()), Token::Dot, 
-            Token::Var("x".into()), Token::LB, Token::Number(-1.0), Token::RB, 
-            Token::ArOp(ArithmeticOperator::Minus), Token::Var("spectrum".into()), 
+        let target = &[Token::Var("spectrum".into()), Token::Dot,
+            Token::Var("x".into()), Token::LB, Token::Number(-1.0), Token::RB,
+            Token::ArOp(ArithmeticOperator::Minus), Token::Var("spectrum".into()),
             Token::Dot, Token::Var("x".into()), Token::LB, Token::Number(0.0), Token::RB
         ];
 
@@ -512,7 +527,7 @@ mod tests {
     fn test_tokenizer_expr4() {
         let input_var = &["v"];
         let expr = "v[0:-1]"; // error
-        let target = &[Token::Var("v".into()), Token::LB, 
+        let target = &[Token::Var("v".into()), Token::LB,
             Token::Number(0.0), Token::Colon, Token::Number(-1.0), Token::RB
             ];
 

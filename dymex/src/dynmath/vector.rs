@@ -7,8 +7,8 @@ impl DynMath for Vec<Float> {
 
     fn category(&self) -> Category { Category::Array }
 
-    fn shape(&self) -> [usize; MAXDIM] { 
-        let mut shape = [0; MAXDIM]; 
+    fn shape(&self) -> [usize; MAXDIM] {
+        let mut shape = [0; MAXDIM];
         shape[0] = self.len();
         shape
     }
@@ -51,6 +51,20 @@ impl DynMath for Vec<Float> {
             _ => unimpl_binary(self.type_name(), other.type_name(), "-")
         }
     }
+    fn sub_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|a| other.as_number() - a).collect::<Vec<Float>>(),
+            )),
+            _ => unimpl_binary(&other.type_name(), self.type_name(), "-")
+        }
+    }
+
+
+
+
+
 
     fn mul(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
@@ -77,6 +91,15 @@ impl DynMath for Vec<Float> {
             _ => unimpl_binary(self.type_name(), other.type_name(), "/")
         }
     }
+    fn div_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|a| other.as_number() / a).collect::<Vec<Float>>(),
+            )),
+            _ => unimpl_binary(&other.type_name(), self.type_name(), "/")
+        }
+    }
 
     fn pow(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
@@ -90,8 +113,16 @@ impl DynMath for Vec<Float> {
             _ => unimpl_binary(self.type_name(), other.type_name(), "^")
         }
     }
+    fn pow_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
+    {
+        match other.category() {
+            Category::Number => Ok(Box::new(
+                self.iter().map(|a| other.as_number().powf(*a)).collect::<Vec<Float>>(),
+            )),
+            _ => unimpl_binary(&other.type_name(), self.type_name(), "/")
+        }
+    }
 
-    
     fn min(&self) -> Result<Float, EvaluationError> {
         Ok(self.iter().fold(float::INFINITY, |a, &b| a.min(b)))
     }
@@ -119,14 +150,14 @@ impl DynMath for Vec<Float> {
     fn l1_norm(&self) -> Result<Float, EvaluationError> {
         Ok(self.iter().map(|e| e.abs()).sum::<Float>())
     }
-    
+
 }
 
 
-//TODO: maybe delete this: 
-fn elementwise<T>(array: &[f64], func: T) -> Result<Vec<Float>, EvaluationError> 
-where 
+//TODO: maybe delete this:
+fn elementwise<T>(array: &[f64], func: T) -> Result<Vec<Float>, EvaluationError>
+where
     T: Fn(&Float) -> Float
 {
     Ok(array.iter().map(|x| func(x)).collect())
-} 
+}

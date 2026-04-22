@@ -17,6 +17,7 @@ pub enum DynVar<T: DynMath> {
     Composite(T)
 }
 
+#[derive(Debug)]
 pub enum Category {
     /// Floating point number
     Number,
@@ -49,7 +50,7 @@ pub trait DynMath : Any {
             (Category::Number, _) => true,
             (_, Category::Number) => true,
             (Category::Array, Category::Array) => {
-                self.shape() == other.shape() 
+                self.shape() == other.shape()
             },
             _ => false // maybe panic here?
         }
@@ -94,8 +95,8 @@ pub trait DynMath : Any {
         }
     }
 
-    /// Returns `field_name` field of self 
-    fn get_field(&self, field_name: &str) -> Result<Box<dyn DynMath>, EvaluationError> 
+    /// Returns `field_name` field of self
+    fn get_field(&self, field_name: &str) -> Result<Box<dyn DynMath>, EvaluationError>
     {
         Err(EvaluationError::InvalidField { type_name: self.type_name(), field: field_name.into() })
     }
@@ -108,7 +109,7 @@ pub trait DynMath : Any {
     {
         unimpl_binary(self.type_name(), other.type_name(), "+")
     }
-    
+
     fn sub(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
         unimpl_binary(self.type_name(), other.type_name(), "-")
@@ -130,25 +131,25 @@ pub trait DynMath : Any {
     }
 
     /// Helpers for non-commutative binary operators
-    /// Number + Array type would be tricky to implement, as it is not obvious how to 
+    /// Number + Array type would be tricky to implement, as it is not obvious how to
     /// reconstruct an Array from its iterator. Instead, we call Array + Number.
     /// For the non-commutative binary operators of `-`, `/` and `^`, inverse methods
-    /// need to be defined. 
-    //TODO Instead of inverse, call it backwards, or righttoleft?  
+    /// need to be defined.
+    //TODO Instead of inverse, call it backwards, or righttoleft?
     fn sub_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
-    {        
-        other.sub(&self.as_number())
+    {
+        unimpl_binary(&other.type_name(), self.type_name(), "-")
     }
     fn div_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        other.div(&self.as_number())
+        unimpl_binary(&other.type_name(), self.type_name(),  "/")
     }
     fn pow_inv(&self, other: &dyn DynMath) -> Result<Box<dyn DynMath>, EvaluationError>
     {
-        other.pow(&self.as_number())
+        unimpl_binary(&other.type_name(), self.type_name(), "**")
     }
 
-    
+
     // unary operations: Self -> Float
     // TODO: median
     fn min(&self) -> Result<Float, EvaluationError> {
@@ -237,13 +238,13 @@ pub trait DynMath : Any {
 }
 
 fn invalid_args_err(func: &str, details: &str) -> Result<Float, EvaluationError> {
-    Err(EvaluationError::InvalidArguments { 
-        function: func.into(), 
-        details: details.into() 
-    }) 
+    Err(EvaluationError::InvalidArguments {
+        function: func.into(),
+        details: details.into()
+    })
 }
 
-fn all_scalars(args: &[Rc<dyn DynMath>]) -> bool 
+fn all_scalars(args: &[Rc<dyn DynMath>]) -> bool
 {
     args.iter().all(|e| matches!(e.category(), Category::Number))
 }
@@ -254,8 +255,8 @@ fn all_scalars(args: &[Rc<dyn DynMath>]) -> bool
 //         if let Ok(n) = v.number() {
 //             res.push(n);
 //         } else {
-//             return Err(EvaluationError::InvalidArguments { 
-//                 function: func.into(), 
+//             return Err(EvaluationError::InvalidArguments {
+//                 function: func.into(),
 //                 details: "every argument should be a number".into()
 //             })
 //         }
@@ -279,7 +280,7 @@ fn unbox_numbers(args: &[Rc<dyn DynMath>], func: &str) -> Result<Vec::<Float>, E
 //         _ => Err(EvaluationError::InvalidUnaryOperation {
 //             operation: op.into(),
 //             operand: obj.type_name().into(),
-//         }),     
+//         }),
 //     }
 // }
 
@@ -287,10 +288,10 @@ fn unbox_numbers(args: &[Rc<dyn DynMath>], func: &str) -> Result<Vec::<Float>, E
 const ZERO_ARGS_ERR: &str = "needs at least one argument";
 const MULTI_ARGS_ERR: &str = "accepts a single array or multiple scalar values";
 
-pub fn dynmath_min(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_min(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("min", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("min", ZERO_ARGS_ERR),
         1 => return args[0].min(),
         _ if !all_scalars(args) => invalid_args_err("min", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "min") {
@@ -303,10 +304,10 @@ pub fn dynmath_min(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 }
 
 
-pub fn dynmath_max(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_max(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("max", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("max", ZERO_ARGS_ERR),
         1 => return args[0].max(),
         _ if !all_scalars(args) => invalid_args_err("max", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "max") {
@@ -318,10 +319,10 @@ pub fn dynmath_max(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
     }
 }
 
-pub fn dynmath_range(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_range(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("range", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("range", ZERO_ARGS_ERR),
         1 => match (args[0].max(), args[0].min()) {
             (Err(e), _) => Err(e),
             (_, Err(e)) => Err(e),
@@ -340,10 +341,10 @@ pub fn dynmath_range(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 }
 
 
-pub fn dynmath_sum(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_sum(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("sum", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("sum", ZERO_ARGS_ERR),
         1 => Ok(args[0].iterate().sum()),
         _ if !all_scalars(args) => invalid_args_err("sum", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "sum") {
@@ -355,10 +356,10 @@ pub fn dynmath_sum(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
     }
 }
 
-pub fn dynmath_avg(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_avg(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("avg", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("avg", ZERO_ARGS_ERR),
         1 => return args[0].avg(),
         _ if !all_scalars(args) => invalid_args_err("avg", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "avg") {
@@ -370,10 +371,10 @@ pub fn dynmath_avg(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
     }
 }
 
-pub fn dynmath_std(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_std(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("std", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("std", ZERO_ARGS_ERR),
         1 => return args[0].std(),
         _ if !all_scalars(args) => invalid_args_err("std", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "std") {
@@ -383,14 +384,14 @@ pub fn dynmath_std(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
                 let sq_err = v.iter().map(|e| (e-avg)*(e-avg)).sum::<Float>();
                 Ok((sq_err / (args.len() as Float)).sqrt())
             }
-        }      
+        }
     }
 }
 
-pub fn dynmath_l2(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_l2(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("l2_norm", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("l2_norm", ZERO_ARGS_ERR),
         1 => return args[0].l2_norm(),
         _ if !all_scalars(args) => invalid_args_err("l2_norm", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "l2_norm") {
@@ -403,10 +404,10 @@ pub fn dynmath_l2(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
     }
 }
 
-pub fn dynmath_l1(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError> 
+pub fn dynmath_l1(args: &[Rc<dyn DynMath>]) -> Result<Float, EvaluationError>
 {
     match args.len() {
-        0 => invalid_args_err("l1_norm", ZERO_ARGS_ERR), 
+        0 => invalid_args_err("l1_norm", ZERO_ARGS_ERR),
         1 => return args[0].l1_norm(),
         _ if !all_scalars(args) => invalid_args_err("l1_norm", MULTI_ARGS_ERR),
         _ => match unbox_numbers(args, "l1_norm") {

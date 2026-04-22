@@ -38,7 +38,7 @@ html, body {
     display: flex;
     flex-direction: column;
     justify-content: center;
-} 
+}
 
 .tabs {
     display: flex;
@@ -98,7 +98,7 @@ html, body {
     background-color: var(--white);
 }
 
-.numberInput {
+.validValueText {
     padding: 5px;
     border-radius: 5px;
     width: 60%;
@@ -107,6 +107,17 @@ html, body {
     font-size: 16;
     background-color: var(--white);
 }
+
+.invalidValueText {
+    padding: 5px;
+    border-radius: 5px;
+    width: 60%;
+    height: 20%;
+    box-sizing: border-box;
+    font-size: 16;
+    background-color: var(--yellow);
+}
+
 
 .numberResult {
     padding: 5px;

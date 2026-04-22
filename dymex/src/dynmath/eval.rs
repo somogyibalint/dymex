@@ -1,9 +1,10 @@
 
-use std::{collections::HashMap};
+use std::{collections::HashMap, collections::hash_map::Iter};
 use std::rc::Rc;
 // use crate::parser::{A};
 use crate::*;
 
+#[derive(Clone)]
 pub struct Evaluator {
     values: HashMap<u16, Rc<dyn DynMath>>,
     expressions: HashMap<u16, Evaluand>,
@@ -11,10 +12,8 @@ pub struct Evaluator {
 }
 
 
-
-//CONSIDER Is a self.update(...) method varranted? Or are we OK creating a new 
+//CONSIDER Is a self.update(...) method varranted? Or are we OK creating a new
 // Evaluator every time the expression or variables change?
-
 impl Evaluator {
     pub fn new(expression: &str, variables: &[&str]) -> Result<Self, DymexError> {
         let mut ts = TokenStream::new();
@@ -29,8 +28,8 @@ impl Evaluator {
         Ok(Self::from_ast(ast))
     }
 
-    fn from_ast(ast: AST) -> Self {
-        let (val, aliases, expr) = flatten_tree(ast);     
+    pub fn from_ast(ast: AST) -> Self {
+        let (val, aliases, expr) = flatten_tree(ast);
         Self {
             values: val,
             expressions: expr,
@@ -43,7 +42,7 @@ impl Evaluator {
             if let Some(x) = inputs.as_hashmap().get(varname) {
                 self.values.insert(*id, x.clone());
             } else {
-                return Err(EvaluationError::MissingInputVariable 
+                return Err(EvaluationError::MissingInputVariable
                     {varname: varname.to_string()}
                 );
             }
@@ -63,7 +62,7 @@ impl Evaluator {
                         if expr_id == final_result_id {
                             return Ok(Box::from(res))
                         }
-                        self.values.insert(*expr_id, Rc::from(res)); 
+                        self.values.insert(*expr_id, Rc::from(res));
                     }
                 }
             }
@@ -71,7 +70,7 @@ impl Evaluator {
             // empty expression
             return Ok(Box::from(float::NAN));
         }
-        
+
         panic!("ERROR: end of evaluation chain")
         // Ok(self.values[final_result_id].clone())
     }
@@ -85,9 +84,13 @@ impl InputVars {
         Self(HashMap::new())
     }
 
-    pub fn insert_owned<T>(&mut self, name: String, value: T) 
+    pub fn insert_owned<T>(&mut self, name: String, value: T)
     where T: DynMath {
         self.0.insert(name, Rc::new(value));
+    }
+
+    pub fn insert_ref(&mut self, name: String, value: Rc<dyn DynMath>) {
+        self.0.insert(name, value);
     }
 
     pub fn names(&self) -> Vec<&str> {
@@ -96,6 +99,10 @@ impl InputVars {
 
     pub fn as_hashmap(&self) -> &HashMap<String, Rc<dyn DynMath>> {
         &self.0
+    }
+
+    pub fn iter(&self) -> Iter<'_, String, Rc<dyn DynMath>> {
+        self.0.iter()
     }
 
 }
@@ -114,12 +121,12 @@ impl IdGenerator {
 
 
 fn flatten_tree(ast: AST)
-    -> (HashMap<u16, Rc<dyn DynMath>>, 
-        HashMap<String, u16>, 
+    -> (HashMap<u16, Rc<dyn DynMath>>,
+        HashMap<String, u16>,
         HashMap<u16, Evaluand>) {
 
     let mut id_gen = IdGenerator::new();
-    
+
     // variables, constants and _evaluated_ results
     let mut values: HashMap<u16, Rc<dyn DynMath>> = HashMap::new();
     // mapping between variable name and id
@@ -127,26 +134,26 @@ fn flatten_tree(ast: AST)
     // evaluands: only expressions!
     let mut evaluands: HashMap<u16, Evaluand> = HashMap::new();
 
-    fn recurse_tree(tree: &Branch, 
-        values: &mut HashMap<u16, Rc<dyn DynMath>>, 
+    fn recurse_tree(tree: &Branch,
+        values: &mut HashMap<u16, Rc<dyn DynMath>>,
         expressions: &mut HashMap<u16, Evaluand>,
         aliases: &mut HashMap<String, u16>,
         id_gen: &mut IdGenerator,
         id: u16) {
             match tree {
                 Branch::Atom(a) => {
-                    //RFO: here we insert a new value for every occurance of the same number/constant/var 
+                    //RFO: here we insert a new value for every occurance of the same number/constant/var
                     match a.token.to_owned() {
                         Token::Const(c) => {
-                            println!("Insert const {} {}", id, c.value()); // DEBUG 
+                            println!("Insert const {} {}", id, c.value()); // DEBUG
                             values.insert(id,Rc::new(c.value()));
                         }
                         Token::Number(x) => {
-                            println!("Insert number {} {}", id, x); // DEBUG 
+                            println!("Insert number {} {}", id, x); // DEBUG
                             values.insert(id,Rc::new(x));
                         }
                         Token::Var(v) => {
-                            println!("Insert var {} {}", id, v); // DEBUG 
+                            println!("Insert var {} {}", id, v); // DEBUG
                             aliases.insert( v, id);
                         }
                         _ => panic!("Unexpected token in transform_tree(). This is likely a bug!")
@@ -158,7 +165,7 @@ fn flatten_tree(ast: AST)
                     // instead this complicated mess:
                     let mut arg_ids: Vec<u16> = Vec::new();
                     for arg in args {
-                        if let Branch::Atom(at) = arg 
+                        if let Branch::Atom(at) = arg
                         && let Token::Var(v) = &at.token {
                             match aliases.get(v) {
                                 None => arg_ids.push(id_gen.get_id()),
@@ -170,57 +177,58 @@ fn flatten_tree(ast: AST)
                     }
 
                     let eval = Evaluand {
-                            op: exp.to_owned(), 
-                            args: arg_ids.to_owned() 
+                            op: exp.to_owned(),
+                            args: arg_ids.to_owned()
                         };
-                    println!("Insert expr {} {}", id, exp.token); // DEBUG 
+                    println!("Insert expr {} {}", id, exp.token); // DEBUG
                     expressions.insert( id, eval);
 
 
                     for (id, arg) in arg_ids.iter().zip(args.iter()) {
                         recurse_tree(
-                            arg, 
-                            values, 
-                            expressions, 
+                            arg,
+                            values,
+                            expressions,
                             aliases,
-                            id_gen, 
+                            id_gen,
                             *id
                         );
                     }
                 }
             }
-        } 
-    
+        }
+
     if let Some(tree) = ast.tree {
         let id = id_gen.get_id();
         recurse_tree(
-            &tree, 
-            &mut values, 
-            &mut evaluands, 
-            &mut aliases, 
-            &mut id_gen, 
+            &tree,
+            &mut values,
+            &mut evaluands,
+            &mut aliases,
+            &mut id_gen,
             id
         );
     } else {
         // empty expression
     }
-    
+
     (values, aliases, evaluands)
 }
 
 
 // by limiting args, this could be kept on the stack
+#[derive(Clone)]
 struct Evaluand {
     op: TokenContext,
-    args: Vec<u16> 
+    args: Vec<u16>
 }
 
-impl Evaluand {    
+impl Evaluand {
     fn eval(&self, values: &HashMap<u16, Rc<dyn DynMath>>) -> Result<Box<dyn DynMath>, EvaluationError> {
         use ArithmeticOperator as AO;
-        
+
         let get_val = |id| &*values[id];
-        
+
         match &self.op.token {
             Token::ArOp(op) => {
                 // debug_assert is enough here if the parser works
@@ -263,7 +271,7 @@ impl Evaluand {
                             |id| values.get(id).unwrap().clone()
                         ).collect();
 
-            
+
                     let result = match fun {
                         Function::Min => dynmath_min(&args),
                         Function::Max => dynmath_max(&args),
@@ -297,7 +305,7 @@ mod tests {
         let tc = TokenContext {token: token, at: 0, len: 0 };
         let eval = Evaluand {
             op: tc,
-            args: vec![0,1] 
+            args: vec![0,1]
         };
 
         let mut variables: HashMap<u16, Rc<dyn DynMath>> = HashMap::new();
@@ -325,7 +333,7 @@ mod tests {
         assert_eq!(res.as_number(), 16.0);
     }
 
-    
+
     #[test]
     fn test_variadic_fnc2() {
         let token = Token::Func(Function::Max, 10);
@@ -336,9 +344,9 @@ mod tests {
         };
         let mut variables: HashMap<u16, Rc<dyn DynMath>> = HashMap::new();
         let vector = vec![-16.0, -4.0, 0.0, 4.0, 8.0];
-        
+
         variables.insert(0, Rc::new(vector));
-        
+
         let res = eval.eval(&variables).unwrap();
         assert_eq!(res.as_number(), 8.0);
     }
