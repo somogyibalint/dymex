@@ -4,10 +4,10 @@ use crate::Latex;
 use crate::tokenizer::*;
 
 const GREEK: [&str; 23] = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta",
-"theta", "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi", "rho", 
+"theta", "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "pi", "rho",
 "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega"];
-const GREEK_CAPITAL: [&str; 23] = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", 
-"Zeta", "Theta", "Iota", "Kappa", "Lambda", "Mu", "Nu", "Xi", "Omicron", "Pi", 
+const GREEK_CAPITAL: [&str; 23] = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon",
+"Zeta", "Theta", "Iota", "Kappa", "Lambda", "Mu", "Nu", "Xi", "Omicron", "Pi",
 "Rho", "Sigma", "Tau", "Upsilon", "Phi", "Chi", "Psi", "Omega"];
 
 impl Latex for Token {
@@ -43,7 +43,7 @@ impl Latex for Token {
             }.to_string(),
             Self::LP => r"\left (".to_string(),
             Self::RP => r"\right )".to_string(),
-            Self::LB => r"\left [".to_string(), 
+            Self::LB => r"\left [".to_string(),
             Self::RB => r"\right [".to_string(),
             Self::Comma => ",".to_string(),
             Self::Semicolon => ";".to_string(),
@@ -68,7 +68,7 @@ impl Latex for Token {
                 Function::Sum => r"\sum",
                 Function::Range => r"(\max - \min)",
                 Function::Sin => r"\sin",
-                Function::Cos => r"\cos", 
+                Function::Cos => r"\cos",
                 Function::Cot => r"\cot",
                 Function::Tan => r"\tan",
                 Function::Log => r"\ln",
@@ -88,7 +88,7 @@ fn format_var_name(v: &str) -> String {
 }
 
 fn format_ending_digits(v: &str) -> String {
-    if let Some(ending_digits) = v.chars().rev().position(|c| !c.is_ascii_digit()) 
+    if let Some(ending_digits) = v.chars().rev().position(|c| !c.is_ascii_digit())
     && ending_digits > 0 {
 
         let name = v.chars().collect::<Vec<char>>();
@@ -97,7 +97,7 @@ fn format_ending_digits(v: &str) -> String {
         let subscript: String = name[name.len()-ending_digits..].iter().collect();
 
         println!("{} {} {}", ending_digits, normal, subscript);
-        
+
 
         formatted.push_str(&format!("{}_{{{}}}", normal, subscript));
         formatted
@@ -144,9 +144,10 @@ impl Latex for Branch {
             Self::Atom(tc) => return tc.token.latex(),
             Self::Expression(tc, c) => {
                 match &tc.token {
-                    Token::ArOp(op) => match op {
-                        ArithmeticOperator::Div => return format!("\\frac{{{}}}{{{}}}", c[0].latex(), c[1].latex()),
-                        ArithmeticOperator::Pow => return format!("({})^{{{}}}", c[0].latex(), c[1].latex()),
+                    Token::ArOp(op) => match (op, c.len()) {
+                        (_, 1) => return [tc.token.latex(), c[0].latex()].concat(),
+                        (ArithmeticOperator::Div, _) => return format!("\\frac{{{}}}{{{}}}", c[0].latex(), c[1].latex()),
+                        (ArithmeticOperator::Pow, _) => return format!("({})^{{{}}}", c[0].latex(), c[1].latex()),
                         _ => return [c[0].latex(), tc.token.latex(), c[1].latex()].concat()
                     }
                     Token::RelOp(_)
@@ -171,13 +172,13 @@ impl Latex for Branch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn format_var() {
         let var = "T";
         let res = format_ending_digits(var);
         assert_eq!(res, var.to_string());
-         
+
     }
 
 }

@@ -107,7 +107,7 @@ fn parse_macro(s: &str, pattern: &str, n_args: usize) -> Option<Vec<String>> {
 fn split_macro_args(args: &[u8], npar: usize) -> Option<Vec<String>> {
     let s = str::from_utf8(args);
     if let Ok(s) = s {
-        let args: Vec<String> = s.split(",").map(|s| s.to_string()).collect();
+        let args: Vec<String> = s.split(",").map(|s| s.trim().to_string()).collect();
         if npar != args.len() {
             return None;
         }

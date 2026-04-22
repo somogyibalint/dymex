@@ -235,9 +235,7 @@ fn App() -> Element {
     // charming
     let renderer = use_signal(|| WasmRenderer::new(600, 400));
     use_effect(move || {
-        // let mut series = Vec::new();
-        // let mut xaxis = Vec::new();
-        // let mut yaxis = Vec::new();
+
         let (xax, yax) = match vec_result() {
             Some(yax) => {
                 match x_axis() {

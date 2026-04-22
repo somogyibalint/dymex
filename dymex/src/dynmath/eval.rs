@@ -4,6 +4,7 @@ use std::rc::Rc;
 // use crate::parser::{A};
 use crate::*;
 
+
 #[derive(Clone)]
 pub struct Evaluator {
     values: HashMap<u16, Rc<dyn DynMath>>,
@@ -231,17 +232,37 @@ impl Evaluand {
 
         match &self.op.token {
             Token::ArOp(op) => {
-                // debug_assert is enough here if the parser works
-                debug_assert_eq!(self.args.len(), 2);
-                let lhs = get_val(&self.args[0]);
-                let rhs = get_val(&self.args[1]);
-                match op {
-                    AO::Plus => return lhs.add(rhs),
-                    AO::Minus => return lhs.sub(rhs),
-                    AO::Mul => return lhs.mul(rhs),
-                    AO::Div => return lhs.div(rhs),
-                    AO::Pow => return lhs.pow(rhs),
-                    _ => panic!("TODO: dkfskjkew")
+                match self.args.len() {
+                    1 => {
+                        let arg = get_val(&self.args[0]);
+                        match op {
+                            AO::Plus => return 0f64.add(arg),
+                            AO::Minus => return 0f64.sub(arg),
+                            _ => Err(EvaluationError::InvalidUnaryOperation {
+                                    operation: self.op.token.to_string(),
+                                    operand: arg.type_name().into(),
+                                    })
+                        }
+                    },
+                    2 => {
+                        let lhs = get_val(&self.args[0]);
+                        let rhs = get_val(&self.args[1]);
+                        match op {
+                            AO::Plus => return lhs.add(rhs),
+                            AO::Minus => return lhs.sub(rhs),
+                            AO::Mul => return lhs.mul(rhs),
+                            AO::Div => return lhs.div(rhs),
+                            AO::Pow => return lhs.pow(rhs),
+                            _ => Err(EvaluationError::InvalidBinaryOperation {
+                                    operation: self.op.token.to_string(),
+                                    lhs: lhs.type_name().into(),
+                                    rhs: rhs.type_name().into(),
+                                    })
+                        }
+                    },
+                    _ => Err(EvaluationError::InvalidOperation {
+                        info: "Only unary and binary arithmetic operators are implemented".into(),
+                    })
                 }
             }
             Token::Func(fun, max_args) => {
