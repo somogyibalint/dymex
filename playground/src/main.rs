@@ -516,7 +516,6 @@ fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
     }
 }
 
-
 #[component]
 fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: String)  -> Element {
     // TODO: how to get rid of these clones???
@@ -591,7 +590,6 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
     }
 }
 
-
 #[component]
 fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
     rsx! {
@@ -604,7 +602,6 @@ fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
         }
     }
 }
-
 
 #[component]
 fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> Element {
@@ -630,7 +627,6 @@ fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> 
     }
 }
 
-
 #[component]
 fn InputValDebug(input_values: Signal<HashMap<String, f64>>) -> Element {
     let mut text = String::new();
@@ -645,40 +641,40 @@ fn InputValDebug(input_values: Signal<HashMap<String, f64>>) -> Element {
     }
 }
 
-#[component]
-fn XAxisSelector(xaxis_options: Vec<String>) -> Element {
-    // let temp = xaxis_options.read();
-    // let options = temp.iter().enumerate().map(|(i, f)| {
-    //     rsx! {
-    //         SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
-    //             SelectItemIndicator {}
-    //         }
-    //     }
-    // });
-    let options = xaxis_options.iter().enumerate().map(|(i, f)| {
-        rsx! {
-            SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
-                SelectItemIndicator {}
-            }
-        }
-    });
+// #[component]
+// fn XAxisSelector(xaxis_options: Vec<String>) -> Element {
+//     let temp = xaxis_options.read();
+//     let options = temp.iter().enumerate().map(|(i, f)| {
+//         rsx! {
+//             SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
+//                 SelectItemIndicator {}
+//             }
+//         }
+//     });
+//     let options = xaxis_options.iter().enumerate().map(|(i, f)| {
+//         rsx! {
+//             SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
+//                 SelectItemIndicator {}
+//             }
+//         }
+//     });
 
-    rsx! {
-        Select::<Option<String>> { placeholder: "Select variable as X axis",
-            SelectTrigger { aria_label: "Select Trigger", width: "12rem", SelectValue {} }
-            SelectList { aria_label: "Select Demo",
-                SelectGroup {
-                    SelectGroupLabel { "Fruits" }
-                    {options}
-                    SelectOption::<String> {
-                        index: 0usize,
-                        value: "apple",
-                        "Apple"
-                        SelectItemIndicator { "✔️" }
-                    }
-                }
-            }
-        }
-    }
-}
+//     rsx! {
+//         Select::<Option<String>> { placeholder: "Select variable as X axis",
+//             SelectTrigger { aria_label: "Select Trigger", width: "12rem", SelectValue {} }
+//             SelectList { aria_label: "Select Demo",
+//                 SelectGroup {
+//                     SelectGroupLabel { "Fruits" }
+//                     {options}
+//                     SelectOption::<String> {
+//                         index: 0usize,
+//                         value: "apple",
+//                         "Apple"
+//                         SelectItemIndicator { "✔️" }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
 

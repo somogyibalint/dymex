@@ -1,6 +1,6 @@
-// use rand::prelude::*;
-// use rand::distr::StandardUniform;
-// use rand_distr::StandardNormal;
+use rand::prelude::*;
+use rand::distr::StandardUniform;
+ use rand_distr::StandardNormal;
 
 use dymex::{DynMath};
 use std::rc::Rc;
@@ -156,18 +156,18 @@ fn generate_linspace(x0: f64, x1: f64, n: usize) -> Vec<f64> {
 
 fn generate_uniform(n: usize) -> Vec<f64> {
     let mut v = Vec::with_capacity(n);
-    // let mut rng = rand::rng();
-    // for _ in 0..n {
-    //     v.push(rng.sample(StandardUniform))
-    // }
+    let mut rng = rand::rng();
+    for _ in 0..n {
+        v.push(rng.sample(StandardUniform))
+    }
     v
 }
 
 fn  generate_normal(n: usize) -> Vec<f64> {
     let mut v = Vec::with_capacity(n);
-    // let mut rng = rand::rng();
-    // for _ in 0..n {
-    //     v.push(rng.sample(StandardNormal))
-    // }
+    let mut rng = rand::rng();
+    for _ in 0..n {
+        v.push(rng.sample(StandardNormal))
+    }
     v
 }

@@ -13,8 +13,9 @@ dioxus = { version = "^0.7.6", features = [] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components" }
 charming = { version = "0.6.0", features = ["wasm"] }
 indexmap = {version = "*"}
-# rand = {version = "0.10.1"}
-# rand_distr = {version = "0.6.0"}
+getrandom = { version = "0.4.2", features = ["wasm_js"] }
+rand = {version = "0.10.1"}
+rand_distr = {version = "0.6.0"}
 
 [features]
 default = ["web"]
