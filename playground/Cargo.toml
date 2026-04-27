@@ -8,11 +8,13 @@ edition = "2021"
 
 [dependencies]
 dymex = {path = "../dymex", version = "*"}
-dioxus = { version = "^0.7.0-rc.1", features = [] }
+dioxus = { version = "^0.7.6", features = [] }
 # dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1" }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components" }
 charming = { version = "0.6.0", features = ["wasm"] }
 indexmap = {version = "*"}
+# rand = {version = "0.10.1"}
+# rand_distr = {version = "0.6.0"}
 
 [features]
 default = ["web"]

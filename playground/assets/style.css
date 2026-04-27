@@ -155,6 +155,28 @@ html, body {
     justify-items: flex-start;
 }
 
+
+.button {
+    border-radius: 0.5rem;
+}
+.xSelectable {
+    background-color: var(--white);
+    color: var(--black);
+}
+.xSelected {
+    background-color: var(--blue);
+    color: var(--yellow);
+}
+ .xNotSelectable {
+    background-color: var(--white);;
+    color: var(--green);
+}
+
+.removeVariable {
+    background-color: var(--white);;
+    color: var(--green);
+}
+
 .mermaid {
     justify-content: "center";
 }

@@ -1,26 +1,29 @@
-use std::collections::HashMap;
-use dioxus::html::tr;
-use indexmap::{IndexMap};
+// use rand::prelude::*;
+// use rand::distr::StandardUniform;
+// use rand_distr::StandardNormal;
 
-use dymex::{DymexError, DynMath, Float, Token, TokenContext};
-use dymex::{Evaluator, InputVars, EvaluationError, AST};
+use dymex::{DynMath};
 use std::rc::Rc;
 
 const MAXLEN : usize = 1024 * 64;
 const MACRO_GRID : &str = "!grid";
 const MACRO_LINSPACE : &str = "!linspace";
+const MACRO_RAND : &str = "!rand";
+const MACRO_RANDNORMAL : &str = "!normal";
+
+
 
 #[derive(Clone)]
 pub struct VarData {
     // name: String,
     pub text: String,
-    pub value: Option<Rc<dyn DynMath>>
+    pub value: Option<Rc<dyn DynMath>>,
 }
 impl VarData {
     pub fn from_text(text: &str) -> Self {
         Self {
             text: text.to_string(),
-            value: parse_variable_value(text)
+            value: parse_variable_value(text),
         }
     }
 }
@@ -37,7 +40,7 @@ pub fn parse_variable_value(varstring: &str) -> Option<Rc<dyn DynMath>> {
 
 pub fn parse_macro_input(s: &str) -> Option<Vec<f64>> {
     if s.starts_with(MACRO_GRID) {
-        let args = parse_macro(s, MACRO_GRID, 3);
+        let args = extract_macro_args(s, MACRO_GRID, 3);
         if let Some(args) = args {
             let x0 = args[0].parse::<f64>();
             let x1 = args[1].parse::<f64>();
@@ -49,7 +52,7 @@ pub fn parse_macro_input(s: &str) -> Option<Vec<f64>> {
         }
     }
     if s.starts_with(MACRO_LINSPACE) {
-        let args = parse_macro(s, MACRO_LINSPACE, 3);
+        let args = extract_macro_args(s, MACRO_LINSPACE, 3);
         if let Some(args) = args {
             let x0 = args[0].parse::<f64>();
             let x1 = args[1].parse::<f64>();
@@ -60,34 +63,31 @@ pub fn parse_macro_input(s: &str) -> Option<Vec<f64>> {
             }
         }
     }
-    // if s.starts_with("!grid") {
-    //     let chars = s.trim().as_bytes();
-    //     let l = chars.get(5);
-    //     let r = chars.last();
-    //     match (l, r) {
-    //         (Some(b'('), Some(b')')) => {
-    //             let args_substring = &chars[6..chars.len()-1];
-    //             if let Some(args) = split_macro_args(args_substring, 3) {
-    //                 let x0 = args[0].parse::<f64>();
-    //                 let x1 = args[1].parse::<f64>();
-    //                 let dx = args[2].parse::<f64>();
-    //                 match (x0, x1, dx) {
-    //                     (Ok(x0), Ok(x1), Ok(dx)) => { return Some(generate_grid(x0, x1, dx));},
-    //                     _ => {return None;}
-    //                 }
-    //             } else {
-    //                 return None;
-    //             }
-    //         },
-    //         _ => {
-    //             return None;
-    //         }
-    //     }
-    // }
+    if s.starts_with(MACRO_RAND) {
+        let args = extract_macro_args(s, MACRO_RAND, 1);
+        if let Some(args) = args {
+            if let Ok(n) = args[0].parse::<usize>() {
+                return Some(generate_uniform(n));
+            } else {
+                return None;
+            }
+        }
+    }
+    if s.starts_with(MACRO_RANDNORMAL) {
+        let args = extract_macro_args(s, MACRO_RANDNORMAL, 1);
+        if let Some(args) = args {
+            if let Ok(n) = args[0].parse::<usize>() {
+                return Some(generate_normal(n));
+            } else {
+                return None;
+            }
+        }
+    }
+
     None
 }
 
-fn parse_macro(s: &str, pattern: &str, n_args: usize) -> Option<Vec<String>> {
+fn extract_macro_args(s: &str, pattern: &str, n_args: usize) -> Option<Vec<String>> {
     let s = s.trim();
     if !s.starts_with(pattern) {
         return  None;
@@ -151,5 +151,23 @@ fn generate_linspace(x0: f64, x1: f64, n: usize) -> Vec<f64> {
         v.push(x);
         x += dx;
     }
+    v
+}
+
+fn generate_uniform(n: usize) -> Vec<f64> {
+    let mut v = Vec::with_capacity(n);
+    // let mut rng = rand::rng();
+    // for _ in 0..n {
+    //     v.push(rng.sample(StandardUniform))
+    // }
+    v
+}
+
+fn  generate_normal(n: usize) -> Vec<f64> {
+    let mut v = Vec::with_capacity(n);
+    // let mut rng = rand::rng();
+    // for _ in 0..n {
+    //     v.push(rng.sample(StandardNormal))
+    // }
     v
 }

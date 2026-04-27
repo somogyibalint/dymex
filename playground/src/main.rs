@@ -1,15 +1,18 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use charming::element::Symbol;
 use indexmap::{IndexMap};
-use std::env::consts::FAMILY;
-use std::env::var;
 
 use dioxus::{prelude::*};
-use dioxus::logger::tracing::{Level, debug, error, info, warn};
+// use dioxus::logger::tracing::{Level, debug, error, info, warn};
 use dioxus_primitives::hover_card::{HoverCard, HoverCardTrigger, HoverCardContent};
 use dioxus_primitives::ContentSide;
 use dioxus_primitives::tabs::{Tabs, TabList, TabContent,TabTrigger};
 use dioxus_elements::keyboard_types::Key;
+use dioxus_primitives::select::{
+    Select, SelectGroup, SelectGroupLabel, SelectItemIndicator, SelectList, SelectOption,
+    SelectTrigger, SelectValue,
+};
 
 use charming::{
     component::Axis,
@@ -18,21 +21,29 @@ use charming::{
     Chart, WasmRenderer,
 };
 
-use dymex::{AST, Category, EvaluationError, Evaluator, InputVars, MermaidStyle, MermaidStyleEnum, Token, TokenContext, TokenStream, styled_ast_graph};
+use dymex::{AST, Category, EvaluationError, Evaluator, InputVars, MermaidStyle, MermaidStyleEnum, TokenContext, TokenStream, styled_ast_graph};
 use dymex::DynMath;
 use std::rc::Rc;
 use dymex::Latex;
 
 static CSS: Asset = asset!("/assets/style.css");
 
+
+// TODO move this to config?
 // static START_EXPR: &str = "(1-R)^2 / (1 - 2*R*cos(4*pi*n*d*cos(theta) / lambda) + R^2)";
 // static START_VAR: [&str; 5] = ["lambda", "n","d", "theta", "R"];
 
-const START_EXPR: &str = "1 / (1 + exp((E - E_f) / (k_b * T)))";
-const START_VAR: [&str; 4] = ["E", "E_f","k_b", "T"];
-const START_VAL: [&str; 4] = ["0.2", "0.0", "8.617333262E-5", "297.0"];
+// const START_EXPR: &str = "1 / (1 + exp((E - E_f) / (k_b * T)))";
+// const START_VAR: [&str; 4] = ["E", "E_f","k_b", "T"];
+// const START_VAL: [&str; 4] = ["0.2", "0.0", "8.617333262E-5", "297.0"];
 
-const DEFAULTVALUE: &str = "-1";
+
+const START_EXPR: &str = "(1 + alpha * cos(2*pi*x*omega) * exp(-x**2 / delta)) / sqrt(1 + x**2) * cos(omega*sqrt(x+3))**2";
+// const START_EXPR: &str = "(1 + alpha * cos(2*pi*x*omega) )";
+const START_VAR: [&str; 4] = ["x", "alpha","omega", "delta"];
+const START_VAL: [&str; 4] = ["!grid(0, 20, 0.002)", "0.6", "3.5", "10"];
+
+
 
 mod helpers;
 use helpers::*;
@@ -67,21 +78,16 @@ fn App() -> Element {
     // let mut evaluator =  EvaluatorAdapter::new();
 
     let raw_expression = use_signal(|| START_EXPR.to_string());
-    // let variables = use_signal(||
-    //     START_VAR
-    //     .iter()
-    //     .map(|s| (*s).to_string())
-    //     .collect::<Vec<String>>()
-    // );
-
     let variables : IndexMap<String, VarData> = START_VAR
         .into_iter()
         .zip(START_VAL.into_iter())
-        .map(|(key, value)| {
-            return (key.to_string(), VarData::from_text(value));
+        .map(|(key, _value)| {
+            return (key.to_string(), VarData::from_text(_value));
         }).collect();
     let variables = use_signal(|| variables );
     let mut referenced_variables: Signal<Vec<String>> = use_signal(|| START_VAR.iter().map(|s| s.to_string()).collect());
+
+    let mut tokens = use_signal(|| Vec::new());
     let mut evaluator: Signal<Option<Evaluator>> = use_signal(|| None);
 
     let mut lexer_msg = use_signal(|| "".to_string());
@@ -92,13 +98,15 @@ fn App() -> Element {
     let mut mermaid_script = use_signal(|| "".to_string());
     let mut mermaid_innerHTML = use_signal(|| "".to_string());
     let mut latex_tex = use_signal(|| "".to_string());
-    let mut tokens = use_signal(|| Vec::new());
+
     let mut valid_expression = use_signal(|| false);
     let mut show_graph= use_signal(|| false);
 
 
     let mut num_result = use_signal(|| Some(f64::NAN));
-    let mut vec_result: Signal<Option<Vec<f64>>> = use_signal(|| None);
+    let mut vec_result = use_signal(|| None::<Vec<f64>>);
+    let mut valid_x_axes= use_signal(|| Vec::new());
+    let mut x_axis_name = use_signal(|| None::<String>);
     let mut x_axis: Signal<Option<Vec<f64>>> = use_signal(|| None);
     let num_result_formatted = use_memo(move || format_num_result(num_result()));
 
@@ -135,7 +143,7 @@ fn App() -> Element {
                     parser_msg.set("✓".to_string());
                     if let Some(branch) = &ast.tree {
                         mermaid_script.set(styled_ast_graph(branch, &mmd_style));
-                        latex_tex.set(format!("{}", branch.latex()));
+                        latex_tex.set(format!("{}", branch.latex().replace("⋅", " ")));
                         valid_expression.set(true);
                     }
                 },
@@ -164,7 +172,6 @@ fn App() -> Element {
         );
     });
 
-
     // Update evaluated value
     use_effect(move || {
         if !valid_expression() {
@@ -174,11 +181,11 @@ fn App() -> Element {
 
         // collect the values of referenced variables
         let mut input = InputVars::new();
-        for name in referenced_variables.read().iter() {
-            if let Some(var)= variables.read().get(name) {
+        for _name in referenced_variables.read().iter() {
+            if let Some(var)= variables.read().get(_name) {
                 match &var.value {
-                    Some(value) => {
-                        input.insert_ref(name.clone(), Rc::clone(value));
+                    Some(_value) => {
+                        input.insert_ref(_name.clone(), Rc::clone(_value));
                     },
                     None => {return}
                 }
@@ -231,11 +238,47 @@ fn App() -> Element {
 
     });
 
+    // Update valid x axis option: same length arrays as the current result
+    use_effect(move || {
+        valid_x_axes.write().clear();
+
+        if let Some(v) = vec_result.read().deref(){
+            let array_len = v.len();
+            let mut tmp = variables.read()
+            .iter()
+            .filter(|&(_, v)| matches!(&v.value, Some(var) if
+                matches!(var.category(), Category::Array) && var.shape()[0] == array_len))
+            .map(|(k, _)| k.clone()).collect::<Vec<String>>();
+        tmp.push("Indices".to_string());
+        valid_x_axes.set(tmp);
+        } else {
+            valid_x_axes.write().push("Indices".to_string());
+        }
+    });
+
+    // update x axis
+    use_effect(move|| {
+        let xax = match x_axis_name.read().deref() {
+            Some(name) => {
+                match valid_x_axes.read().contains(name) {
+                    true => {
+                        if let Some(v) = variables.read().get(name) {
+                            if let Some(val) = &v.value {
+                                Some(val.as_any().downcast_ref::<Vec<f64>>().unwrap().to_vec())
+                            } else { None }
+                        } else { None }
+                    },
+                    false => None
+                }
+            },
+            None => None
+        };
+        x_axis.set(xax)
+    });
 
     // charming
-    let renderer = use_signal(|| WasmRenderer::new(600, 400));
+    let renderer = use_signal(|| WasmRenderer::new_opt(None, Some(600)).theme(charming::theme::Theme::Essos));
     use_effect(move || {
-
         let (xax, yax) = match vec_result() {
             Some(yax) => {
                 match x_axis() {
@@ -257,11 +300,13 @@ fn App() -> Element {
             )))
             .x_axis(Axis::new().type_(AxisType::Value))
             .y_axis(Axis::new())
-            .series(Line::new().symbol(Symbol::None).data(series));
-        renderer.read_unchecked().render("chart", &chart).unwrap();
+            .series(Line::new().symbol(Symbol::None).data(series)).animation(false);
+        // TODO: log error?
+        let _ = renderer.read_unchecked().render("chart", &chart);
     });
 
-
+    // X axis selector
+    // ! deleting the currently selected option does not affect the selection
     let result_display = match show_graph() {
         false => { rsx! {
             div {
@@ -273,16 +318,48 @@ fn App() -> Element {
                 }
             }
         },
-        true => { rsx! {
+        true => {
+            // let mut options = variables.read().iter()
+            //     .filter(|&(_, v)| matches!(&v.value, Some(var) if matches!(var.category(), Category::Array)))
+            //     .map(|(k, _)| k.clone()
+            // ).collect::<Vec<String>>();
+            // options.push("Indices".to_string());
+            let default = match x_axis_name() {
+                Some(selected) => Some(selected),
+                None => valid_x_axes.read().first().map(|s| s.to_string())
+                // None => options.first().map(|s| s.to_string())
+            };
+            let vxax = valid_x_axes.read();
+            let options = vxax.iter().enumerate().map(|(i, f)| {
+                rsx! {
+                    SelectOption::<String> { index: i, value: f.clone(), {format!("{}", f)}
+                    SelectItemIndicator { "✓" }
+                    }
+                 }
+                });
+            rsx! {
             div {
                 width: "100%",
                 div {
                     id: "chart",
-                    style: "display: inline-block;"
-                }
+                    style: "display: inline-block;",
+                    width: "100%",
+                },
+                div {
+                    Select::<String> {
+                        placeholder: "Select variable as X axis",
+                        default_value: default,
+                        on_value_change: move |value| x_axis_name.set(value) ,
+                        SelectTrigger { aria_label: "Select X Trigger", width: "12rem", SelectValue {} }
+                        SelectList { aria_label: "Select X",
+                            SelectGroup { {options} }
+                        }
+                    }
+                },
             }
         }},
     };
+
 
     rsx! {
         document::Stylesheet { href: CSS }
@@ -303,7 +380,6 @@ fn App() -> Element {
                 class: "tabs-list",
                 TabTrigger { class: "tabs-trigger", value: "tab1".to_string(), index: 0usize, "Calculator" }
                 TabTrigger { class: "tabs-trigger", value: "tab5".to_string(), index: 5usize, "Debug" }
-                TabTrigger { class: "tabs-trigger", value: "tab6".to_string(), index: 6usize, "Tab2" }
                 TabTrigger { class: "tabs-trigger", value: "tab7".to_string(), index: 7usize, "Tab3" }
             }
             TabContent {
@@ -323,36 +399,30 @@ fn App() -> Element {
                         align_items: "start",
                         justify_content: "center",
                         div {
+                            display: "flex",
+                            flex_direction: "column",
                             width: "60%",
                             ExpressionInput { raw_expression }
+                            div {
+                                width: "100%",
+                                div {
+                                    id: "latexOutput",
+                                    class: "renderLatex"
+                                }
+                            }
                         }
                         div {
                             width: "40%",
                             InputList { variables }
                         }
                     }
-                    div {
-                        id: "calculator_results",
-                        width: "100%",
-                        display: "flex",
-                        flex_direction: "row",
-                        align_items: "start",
-                        justify_content: "center",
-                        div {
-                            width: "60%",
-                            div {
-                                id: "latexOutput",
-                                class: "renderLatex"
-                            }
-                        }
-
-                    }
+                    // numeric results / graph
                     div {
                         {result_display}
                     }
-
+                    // debug message stream
                     div {
-                        hidden:"true",
+                        hidden:"false",
                         h3 {"Console"}
                         pre {class: "errMsg",
                             {debug_msg}
@@ -360,7 +430,6 @@ fn App() -> Element {
                     }
                 }
             }
-
             TabContent {
                 index: 5usize,
                 value: "tab5".to_string(),
@@ -371,83 +440,42 @@ fn App() -> Element {
                     flex_direction: "row",
                     align_items: "start",
                     justify_content: "center",
-
-                    // div {
-                    //     class: "hstack",
-                    //     width: "70%",
-
-                        div {id: "parse_leftcol",
-                            width: "50%",
-                            display: "flex",
-                            flex_direction: "column",
-                            justify_content: "center",
-                            // div { ExpressionInput { raw_expression } }
-                            div { InputList { variables } }
-                            div { LexerOutput {tokens, lexer_msg} }
-                            div {
-                                h3 {"Parser"}
-                                pre {class: "errMsg",
-                                    {parser_msg}
-                                }
-                            }
-                            div { class: "renderLatex",
-                                display: "none",
-                                pre { id: "latexInput",
-                                {latex_tex}}
+                    div {id: "parse_leftcol",
+                        width: "50%",
+                        display: "flex",
+                        flex_direction: "column",
+                        justify_content: "center",
+                        // div { ExpressionInput { raw_expression } }
+                        div { InputList { variables } }
+                        div { LexerOutput {tokens, lexer_msg} }
+                        div {
+                            h3 {"Parser"}
+                            pre {class: "errMsg",
+                                {parser_msg}
                             }
                         }
-                        div {id: "parse_rightcol",
-                            width: "50%",
-                            display: "flex",
-                            flex_direction: "column",
-                            justify_content: "center",
-                            h3 {text_align: "center", "Syntax Tree"}
-                            div {id: "mermaid-div",
-                                justify_content: "center",
-                                dangerous_inner_html: "{mermaid_innerHTML}"
-                            }
+                        div { class: "renderLatex",
+                            display: "none",
+                            pre { id: "latexInput",
+                            {latex_tex}}
                         }
-                    // }
+                    }
+                    div {id: "parse_rightcol",
+                        width: "50%",
+                        display: "flex",
+                        flex_direction: "column",
+                        justify_content: "center",
+                        h3 {text_align: "center", "Syntax Tree"}
+                        div {id: "mermaid-div",
+                            justify_content: "center",
+                            dangerous_inner_html: "{mermaid_innerHTML}"
+                        }
+                    }
                 }
             }
             TabContent {
-                index: 6usize,
-                class: "tabs-content",
-                value: "tab6".to_string(),
-                div {
-                    width: "100%",
-                    display: "flex",
-                    justify_content: "center",
-                    flex_direction: "row",
-                    align_items: "start",
-                    div {
-                        id: "parse_leftcol",
-                        width: "50%",
-                        display: "flex",
-                        justify_content: "center",
-                        flex_direction: "column",
-                        align_items: "start",
-
-                        // InputValues { variables, input_values }
-                        // span {class: "numberResult",
-                        //     {num_result_formatted}
-                        // }
-                        pre {class: "errMsg",
-                            {eval_msg}
-                        }
-                        // InputValDebug { input_values }
-                    }
-                    // div {
-                    //     id: "parse_rightcol",
-                    //     width: "50%",
-                    //     display: "flex",
-                    //     justify_content: "center",
-                    //     flex_direction: "column",
-                    //     align_items: "start",
-                    // }
-                }
-            }
-            TabContent { index: 7usize, value: "tab7".to_string(),
+                index: 7usize,
+                value: "tab7".to_string(),
                 div {
                     width: "100%",
                     height: "5rem",
@@ -476,9 +504,9 @@ fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
             class: "add_variable",
             onclick: move |_| {
                 for i in 1..100 {
-                    let name = format!("var{i}");
-                    if !variables.read().contains_key(&name) {
-                        variables.write().insert(name, VarData{text: "1".to_string(), value: Some(Rc::new(1.0f64))});
+                    let _name = format!("var{i}");
+                    if !variables.read().contains_key(&_name) {
+                        variables.write().insert(_name, VarData{text: "1".to_string(), value: Some(Rc::new(1.0f64))});
                         break;
                     }
                 }
@@ -487,6 +515,7 @@ fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
         }
     }
 }
+
 
 #[component]
 fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: String)  -> Element {
@@ -517,11 +546,11 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
                         match variables.read().contains_key(&new_name) {
                             true => { }, //TODO: emit warning?
                             false => {
-                                for (name, data) in variables().into_iter() {
-                                    if name == v1 {
+                                for (_name, data) in variables().into_iter() {
+                                    if _name == v1 {
                                         new_map.insert(new_name.clone(), data.clone());
                                     } else {
-                                        new_map.insert(name.clone(), data.clone());
+                                        new_map.insert(_name.clone(), data.clone());
                                     }
                                 }
                             },
@@ -534,30 +563,29 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
                 class: value_input,
                 type: "text",
                 step: "any",
-                //value: input_formatter(variables.read().get(&v2).unwrap().text.as_ref()), // !unwrap
-                value: variables.read().get(&v2).unwrap().text.clone(),
+                value: variables.read().get(&v2).unwrap().text.clone(), // !unwrap
                 onkeypress: move |event: KeyboardEvent| {
                     match event.key() {
                         Key::Enter | Key::Tab => {
                             let new_text = buffer.peek().clone();
-                            let value = parse_variable_value(&new_text);
-                            variables.write().insert(v2.clone(), VarData { text: new_text, value });
+                            let _value = parse_variable_value(&new_text);
+                            variables.write().insert(v2.clone(), VarData { text: new_text, value: _value});
                         },
                         _ => {}
                     }
                 },
                 oninput: move |event: Event<FormData>| {
                     buffer.set(event.value());
-                    variables.write().insert(v3.clone(), VarData { text: event.value(), value: None });
+                    variables.write().insert(v3.clone(), VarData { text: event.value(), value: None});
                     buffer.set(event.value());
                 }
             }
             button {
-                class: "remove_variable",
+                class: "button removeVariable",
                 onclick: move |_| {
                     variables.write().shift_remove(&v4);
                 },
-                "×"
+                "❌"
             }
         }
     }
@@ -576,6 +604,7 @@ fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
         }
     }
 }
+
 
 #[component]
 fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> Element {
@@ -602,11 +631,8 @@ fn LexerOutput(tokens: Signal<Vec<TokenContext>>, lexer_msg: Signal<String>) -> 
 }
 
 
-
 #[component]
-fn InputValDebug(
-    input_values: Signal<HashMap<String, f64>>
-) -> Element {
+fn InputValDebug(input_values: Signal<HashMap<String, f64>>) -> Element {
     let mut text = String::new();
     for (k, v) in input_values.read().iter() {
         text.push_str(&format!("{} = {} \n", k, v));
@@ -618,3 +644,41 @@ fn InputValDebug(
         }
     }
 }
+
+#[component]
+fn XAxisSelector(xaxis_options: Vec<String>) -> Element {
+    // let temp = xaxis_options.read();
+    // let options = temp.iter().enumerate().map(|(i, f)| {
+    //     rsx! {
+    //         SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
+    //             SelectItemIndicator {}
+    //         }
+    //     }
+    // });
+    let options = xaxis_options.iter().enumerate().map(|(i, f)| {
+        rsx! {
+            SelectOption::<Option<String>> { index: i, value: f.clone(), {format!("{}", f)}
+                SelectItemIndicator {}
+            }
+        }
+    });
+
+    rsx! {
+        Select::<Option<String>> { placeholder: "Select variable as X axis",
+            SelectTrigger { aria_label: "Select Trigger", width: "12rem", SelectValue {} }
+            SelectList { aria_label: "Select Demo",
+                SelectGroup {
+                    SelectGroupLabel { "Fruits" }
+                    {options}
+                    SelectOption::<String> {
+                        index: 0usize,
+                        value: "apple",
+                        "Apple"
+                        SelectItemIndicator { "✔️" }
+                    }
+                }
+            }
+        }
+    }
+}
+

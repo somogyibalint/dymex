@@ -13,7 +13,7 @@ impl DynMath for Vec<Float> {
         shape
     }
 
-        fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
