@@ -8,11 +8,10 @@ use dioxus::{prelude::*};
 use dioxus_primitives::hover_card::{HoverCard, HoverCardTrigger, HoverCardContent};
 use dioxus_primitives::ContentSide;
 use dioxus_primitives::tabs::{Tabs, TabList, TabContent,TabTrigger};
+use dioxus_primitives::select::{Select, SelectGroup, SelectItemIndicator, SelectList, SelectOption, SelectTrigger, SelectValue,};
+use dioxus_primitives::context_menu::{ContextMenu, ContextMenuItem, ContextMenuTrigger, ContextMenuContent};
 use dioxus_elements::keyboard_types::Key;
-use dioxus_primitives::select::{
-    Select, SelectGroup, SelectGroupLabel, SelectItemIndicator, SelectList, SelectOption,
-    SelectTrigger, SelectValue,
-};
+
 
 use charming::{
     component::Axis,
@@ -41,8 +40,10 @@ static CSS: Asset = asset!("/assets/style.css");
 const START_EXPR: &str = "(1 + alpha * cos(2*pi*x*omega) * exp(-x**2 / delta)) / sqrt(1 + x**2) * cos(omega*sqrt(x+3))**2";
 // const START_EXPR: &str = "(1 + alpha * cos(2*pi*x*omega) )";
 const START_VAR: [&str; 4] = ["x", "alpha","omega", "delta"];
-const START_VAL: [&str; 4] = ["!grid(0, 20, 0.002)", "0.6", "3.5", "10"];
+const START_VAL: [&str; 4] = ["!linspace(0, 20, 2000)", "0.6", "3.5", "10"];
 
+const MACRO_LABELS : [&str; 4] = ["grid", "linspace", "rand", "normal"];
+const MACRO_DEFAULTS : [&str; 4] = ["!grid(0.0, 1.0, 0.005)", "!linspace(0.0, 1.0, 200)", "!rand(100)", "!normal(100)"];
 
 
 mod helpers;
@@ -338,26 +339,27 @@ fn App() -> Element {
                  }
                 });
             rsx! {
-            div {
-                width: "100%",
                 div {
-                    id: "chart",
-                    style: "display: inline-block;",
                     width: "100%",
-                },
-                div {
-                    Select::<String> {
-                        placeholder: "Select variable as X axis",
-                        default_value: default,
-                        on_value_change: move |value| x_axis_name.set(value) ,
-                        SelectTrigger { aria_label: "Select X Trigger", width: "12rem", SelectValue {} }
-                        SelectList { aria_label: "Select X",
-                            SelectGroup { {options} }
+                    div {
+                        id: "chart",
+                        style: "display: inline-block;",
+                        width: "100%",
+                    },
+                    div {
+                        Select::<String> {
+                            placeholder: "Select variable as X axis",
+                            default_value: default,
+                            on_value_change: move |value| x_axis_name.set(value) ,
+                            SelectTrigger { aria_label: "Select X Trigger", width: "12rem", SelectValue {} }
+                            SelectList { aria_label: "Select X",
+                                SelectGroup { {options} }
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
-        }},
+        },
     };
 
 
@@ -518,17 +520,32 @@ fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
 
 #[component]
 fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: String)  -> Element {
-    // TODO: how to get rid of these clones???
-    let v1 = var_name.clone();
-    let v2 = var_name.clone();
-    let v3 = var_name.clone();
-    let v4 = var_name.clone();
+    let varname = use_signal(|| var_name.clone());
 
     let mut buffer =  use_signal(|| variables.read().get(&var_name).unwrap().text.clone());
     let value_input = match variables.read().get(&var_name).unwrap().value {
         None => "invalidValueText",
         _ => "validValueText",
     };
+
+    // generate context menu
+    let context_menu_list = MACRO_LABELS
+    .into_iter()
+    .zip(MACRO_DEFAULTS.into_iter())
+    .enumerate()
+    .map(|(i, (label, default_value))| {
+        rsx! {
+            ContextMenuItem {
+                value: default_value.to_string(),
+                index: i,
+                on_select: move |value: String| {
+                    let _value = parse_variable_value(&value);
+                    variables.write().insert(varname(), VarData { text: value, value: _value});
+                },
+                {format!("{}", label)}
+            }
+        }
+    });
 
     rsx!{
         div {
@@ -546,7 +563,7 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
                             true => { }, //TODO: emit warning?
                             false => {
                                 for (_name, data) in variables().into_iter() {
-                                    if _name == v1 {
+                                    if _name == *varname.read() {
                                         new_map.insert(new_name.clone(), data.clone());
                                     } else {
                                         new_map.insert(_name.clone(), data.clone());
@@ -558,31 +575,39 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
                     }
                 }
             }
-            input {
-                class: value_input,
-                type: "text",
-                step: "any",
-                value: variables.read().get(&v2).unwrap().text.clone(), // !unwrap
-                onkeypress: move |event: KeyboardEvent| {
-                    match event.key() {
-                        Key::Enter | Key::Tab => {
-                            let new_text = buffer.peek().clone();
-                            let _value = parse_variable_value(&new_text);
-                            variables.write().insert(v2.clone(), VarData { text: new_text, value: _value});
+            ContextMenu {
+                ContextMenuTrigger {
+                    input {
+                        class: value_input,
+                        type: "text",
+                        step: "any",
+                        value: variables.read().get(varname.read().deref()).unwrap().text.clone(), // !unwrap
+                        onkeypress: move |event: KeyboardEvent| {
+                            match event.key() {
+                                Key::Enter | Key::Tab => {
+                                    let new_text = buffer.peek().clone();
+                                    let _value = parse_variable_value(&new_text);
+                                    variables.write().insert(varname(), VarData { text: new_text, value: _value});
+                                },
+                                _ => {}
+                            }
                         },
-                        _ => {}
+                        oninput: move |event: Event<FormData>| {
+                            buffer.set(event.value());
+                            variables.write().insert(varname(), VarData { text: event.value(), value: None});
+                            buffer.set(event.value());
+                        }
                     }
-                },
-                oninput: move |event: Event<FormData>| {
-                    buffer.set(event.value());
-                    variables.write().insert(v3.clone(), VarData { text: event.value(), value: None});
-                    buffer.set(event.value());
+                }
+                ContextMenuContent {
+                    {context_menu_list}
                 }
             }
+
             button {
                 class: "button removeVariable",
                 onclick: move |_| {
-                    variables.write().shift_remove(&v4);
+                    variables.write().shift_remove(varname.read().deref());
                 },
                 "❌"
             }
