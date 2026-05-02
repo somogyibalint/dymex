@@ -14,7 +14,7 @@ use dioxus_elements::keyboard_types::Key;
 
 
 use charming::{
-    component::Axis,
+    component::{Axis, Toolbox, Feature, DataView, Restore, SaveAsImage, ToolboxDataZoom, DataZoomType},
     element::{AxisType, JsFunction, Tooltip},
     series::Line,
     Chart, WasmRenderer,
@@ -94,7 +94,7 @@ fn App() -> Element {
     let mut lexer_msg = use_signal(|| "".to_string());
     let mut parser_msg = use_signal(|| "".to_string());
     let mut eval_msg = use_signal(|| "".to_string());
-    let mut debug_msg = use_signal(|| "".to_string());
+    let mut console_text = use_signal(|| Vec::new() );
 
     let mut mermaid_script = use_signal(|| "".to_string());
     let mut mermaid_innerHTML = use_signal(|| "".to_string());
@@ -195,15 +195,15 @@ fn App() -> Element {
             }
         }
         // debug
-        debug_msg.set("".to_string());
+        console_text.write().clear();
         for (k , v) in input.iter() {
             match v.category() {
                 Category::Number => {
-                    debug_msg.write().push_str(&format!("{:?}: {:?}\n", k, v.as_number())); //DEBUG
+                    console_text.write().push(format!("{:?}: {:?}\n", k, v.as_number())); //DEBUG
                 }
                 Category::Array => {
                     let v = v.as_any().downcast_ref::<Vec<f64>>().unwrap().to_vec();
-                    debug_msg.write().push_str(&format!("{:?}: {:?}..{:?}\n", k, v[0], v[v.len()-1])); //DEBUG
+                    console_text.write().push(format!("{:?}: {:?}..{:?}\n", k, v[0], v[v.len()-1])); //DEBUG
                 }
                 _ => {}
             }
@@ -213,7 +213,7 @@ fn App() -> Element {
             match eval.evaluate(&input) {
                 Ok(x) => {
                     eval_msg.set("✓".to_string());
-                    debug_msg.write().push_str(&format!("result: {:?}", x.category())); //DEBUG
+                    console_text.write().push(format!("result: {:?}", x.category())); //DEBUG
                     match x.category() {
                         Category::Number => {
                             num_result.set(Some(x.as_number()));
@@ -278,7 +278,7 @@ fn App() -> Element {
     });
 
     // charming
-    let renderer = use_signal(|| WasmRenderer::new_opt(None, Some(600)).theme(charming::theme::Theme::Essos));
+    let renderer = use_signal(|| WasmRenderer::new_opt(None, Some(600)).theme(charming::theme::Theme::Vintage));
     use_effect(move || {
         let (xax, yax) = match vec_result() {
             Some(yax) => {
@@ -301,7 +301,15 @@ fn App() -> Element {
             )))
             .x_axis(Axis::new().type_(AxisType::Value))
             .y_axis(Axis::new())
-            .series(Line::new().symbol(Symbol::None).data(series)).animation(false);
+            .series(Line::new().symbol(Symbol::None).data(series))
+            .animation(false).toolbox(
+                Toolbox::new().feature(
+                    Feature::new()
+                    .data_view(DataView::new().read_only(false))
+                    .data_zoom(ToolboxDataZoom::new())
+                    .restore(Restore::new())
+                    .save_as_image(SaveAsImage::new()),
+                ));
         // TODO: log error?
         let _ = renderer.read_unchecked().render("chart", &chart);
     });
@@ -320,11 +328,6 @@ fn App() -> Element {
             }
         },
         true => {
-            // let mut options = variables.read().iter()
-            //     .filter(|&(_, v)| matches!(&v.value, Some(var) if matches!(var.category(), Category::Array)))
-            //     .map(|(k, _)| k.clone()
-            // ).collect::<Vec<String>>();
-            // options.push("Indices".to_string());
             let default = match x_axis_name() {
                 Some(selected) => Some(selected),
                 None => valid_x_axes.read().first().map(|s| s.to_string())
@@ -351,7 +354,10 @@ fn App() -> Element {
                             placeholder: "Select variable as X axis",
                             default_value: default,
                             on_value_change: move |value| x_axis_name.set(value) ,
-                            SelectTrigger { aria_label: "Select X Trigger", width: "12rem", SelectValue {} }
+                            SelectTrigger {
+                                aria_label: "Select X Trigger",
+                                class: "x_select_btn",
+                                SelectValue {} }
                             SelectList { aria_label: "Select X",
                                 SelectGroup { {options} }
                             }
@@ -362,10 +368,8 @@ fn App() -> Element {
         },
     };
 
-
     rsx! {
         document::Stylesheet { href: CSS }
-
 
         div { id: "title",
             text_align: "center",
@@ -375,7 +379,7 @@ fn App() -> Element {
         Tabs {
             default_value: "tab1".to_string(),
             horizontal: true,
-            max_width: "100%",
+            align_content: "center",
             class: "tabs",
             TabList {
                 justify_content: "center",
@@ -389,10 +393,10 @@ fn App() -> Element {
                 value: "tab1".to_string(),
                 div {
                     id: "calculator",
-                    width: "80%",
                     display: "flex",
                     flex_direction: "column",
                     justify_content: "center",
+                    align_items: "center",
                     div {
                         id: "calculator_inputs",
                         width: "100%",
@@ -400,6 +404,7 @@ fn App() -> Element {
                         flex_direction: "row",
                         align_items: "start",
                         justify_content: "center",
+                        gap: "20px",
                         div {
                             display: "flex",
                             flex_direction: "column",
@@ -413,23 +418,24 @@ fn App() -> Element {
                                 }
                             }
                         }
-                        div {
-                            width: "40%",
-                            InputList { variables }
+                        div {width: "40%",
+                            display: "flex",
+                            flex_direction: "column",
+                            h3 {"Inputs"}
+                            div {class: "varInputList",
+                                InputList { variables }
+                            }
                         }
                     }
                     // numeric results / graph
-                    div {
+                    div {width: "100%",
+                        display: "flex",
+                        flex_direction: "column",
+                        justify_content: "center",
                         {result_display}
                     }
                     // debug message stream
-                    div {
-                        hidden:"false",
-                        h3 {"Console"}
-                        pre {class: "errMsg",
-                            {debug_msg}
-                        }
-                    }
+                    Console { messages:console_text }
                 }
             }
             TabContent {
@@ -496,14 +502,12 @@ fn App() -> Element {
 #[component]
 fn InputList(mut variables: Signal<IndexMap<String, VarData>>) -> Element {
     rsx!{
-        h3 {"Variables"}
         for (var_name, _) in variables().into_iter() {
-            div {
-                InputElement {variables: variables, var_name: var_name}
+            div {InputElement {variables: variables, var_name: var_name}
             }
         }
         button {
-            class: "add_variable",
+            class: "addVariable",
             onclick: move |_| {
                 for i in 1..100 {
                     let _name = format!("var{i}");
@@ -524,8 +528,8 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
 
     let mut buffer =  use_signal(|| variables.read().get(&var_name).unwrap().text.clone());
     let value_input = match variables.read().get(&var_name).unwrap().value {
-        None => "invalidValueText",
-        _ => "validValueText",
+        None => "invalidValueBox",
+        _ => "validValueBox",
     };
 
     // generate context menu
@@ -549,7 +553,7 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
 
     rsx!{
         div {
-            class: "hstack",
+            class: "inputElement",
             input {
                 class: "varInput",
                 value: var_name.clone(),
@@ -576,12 +580,13 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
                 }
             }
             ContextMenu {
+                class: "ctxMenuArea",
                 ContextMenuTrigger {
                     input {
                         class: value_input,
                         type: "text",
                         step: "any",
-                        value: variables.read().get(varname.read().deref()).unwrap().text.clone(), // !unwrap
+                        value: variables.read().get(varname.read().deref()).unwrap().text.clone(), // !unwrap, this panic when deletion???
                         onkeypress: move |event: KeyboardEvent| {
                             match event.key() {
                                 Key::Enter | Key::Tab => {
@@ -605,11 +610,11 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
             }
 
             button {
-                class: "button removeVariable",
+                class: "removeVariable",
                 onclick: move |_| {
                     variables.write().shift_remove(varname.read().deref());
                 },
-                "❌"
+                "☓"
             }
         }
     }
@@ -619,7 +624,7 @@ fn InputElement(mut variables: Signal<IndexMap<String, VarData>>, var_name: Stri
 fn ExpressionInput(mut raw_expression: Signal<String>) -> Element {
     rsx! {
         h3 {"Expression"}
-        input {class: "exprInput",
+        textarea {class: "exprInput",
             value: "{raw_expression}",
             oninput: move |event: Event<FormData>|  {
                 raw_expression.set(event.value());
@@ -662,6 +667,23 @@ fn InputValDebug(input_values: Signal<HashMap<String, f64>>) -> Element {
         pre {
             padding: "20px",
             {text}
+        }
+    }
+}
+
+
+#[component]
+fn Console(messages: Signal<Vec<String>>) -> Element {
+    rsx!{
+        // h3 {"Console"}
+        div {
+            hidden:"false",
+            class: "console",
+            for msg in messages.read().iter() {
+                pre {class: "consoleMessage",
+                    dangerous_inner_html: "<code> {msg.clone()} </code>"
+                }
+            }
         }
     }
 }
