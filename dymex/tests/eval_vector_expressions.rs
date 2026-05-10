@@ -43,7 +43,7 @@ fn test_stats() {
 fn test_fermi() {
     let expression = "1 / (1 + exp((E - E_f) / (k_b * T)))";
     let mut variables= InputVars::new();
-    let e = vec![-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
+    let e = vec![-2.0, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0];
     variables.insert_owned("E_f".to_owned(), 0.0);
     variables.insert_owned("k_b".to_owned(), 8.617333262E-5);
     variables.insert_owned("T".to_owned(), 297.0);
@@ -54,9 +54,9 @@ fn test_fermi() {
     match result.category() {
         Category::Array => {
             let v = result.as_any().downcast_ref::<Vec<f64>>().unwrap().to_vec();
-            println!("{}..{}", v[0], v[v.len()]);
+            assert!(v[0] > 0.9999);
+            assert!(v[v.len()-1] < 0.0001);
         },
         _ => {panic!("Evaluation error, expted vector")}
     }
-
-}
+} //TODO clean up this test

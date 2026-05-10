@@ -80,6 +80,7 @@ impl TokenStream {
     }
 
     /// Update the expression and variable keys, tokenize the expression if changed
+    //TODO review `variables : &[&str]` PITA to use
     pub fn update(&mut self, expression: &str, variables: &[&str] )
     -> Result<(), TokenizerError> {
         // maybe save last Err so we can return it:

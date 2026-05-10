@@ -33,6 +33,9 @@ pub enum EvaluationError {
     InvalidOperation {
         info: String,
     },
+    #[error("Missing expression for final result")]
+    MissingFinalExpression,
+
     #[error("unknown error")]
     Unknown,
 }

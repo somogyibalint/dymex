@@ -5,6 +5,8 @@ use std::any::Any;
 
 impl DynMath for Float {
 
+    fn clone_boxed(&self) -> Box<dyn DynMath> { Box::new(self.clone())}
+
     fn category(&self) -> Category { Category::Number }
 
     fn shape(&self) -> [usize; MAXDIM] { [0; MAXDIM] }

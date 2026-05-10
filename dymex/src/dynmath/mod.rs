@@ -9,6 +9,8 @@ mod number;
 mod vector;
 mod eval;
 pub use eval::*;
+mod multi_eval;
+pub use multi_eval::*;
 mod error;
 pub use error::*;
 
@@ -40,6 +42,8 @@ pub type Unary = fn(Float) -> Float;
 
 
 pub trait DynMath : Any {
+
+    fn clone_boxed(&self) -> Box<dyn DynMath>;
 
     fn category(&self) -> Category;
 

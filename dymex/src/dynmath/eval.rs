@@ -4,7 +4,6 @@ use std::rc::Rc;
 // use crate::parser::{A};
 use crate::*;
 
-
 #[derive(Clone)]
 pub struct Evaluator {
     values: HashMap<u16, Rc<dyn DynMath>>,
@@ -79,6 +78,7 @@ impl Evaluator {
 
 
 /// Convenience newtype for the DynMath evaluator
+#[derive(Clone)]
 pub struct InputVars(HashMap<String, Rc<dyn DynMath>>);
 impl InputVars {
     pub fn new() -> Self {
@@ -105,6 +105,9 @@ impl InputVars {
     pub fn iter(&self) -> Iter<'_, String, Rc<dyn DynMath>> {
         self.0.iter()
     }
+    pub fn get(&self, key: &str) -> Option<&Rc<dyn DynMath>> {
+        self.0.get(key)
+    }
 
 }
 
@@ -121,7 +124,7 @@ impl IdGenerator {
 }
 
 
-fn flatten_tree(ast: AST)
+pub(crate) fn flatten_tree(ast: AST)
     -> (HashMap<u16, Rc<dyn DynMath>>,
         HashMap<String, u16>,
         HashMap<u16, Evaluand>) {
@@ -219,13 +222,13 @@ fn flatten_tree(ast: AST)
 
 // by limiting args, this could be kept on the stack
 #[derive(Clone)]
-struct Evaluand {
+pub(crate) struct Evaluand {
     op: TokenContext,
     args: Vec<u16>
 }
 
 impl Evaluand {
-    fn eval(&self, values: &HashMap<u16, Rc<dyn DynMath>>) -> Result<Box<dyn DynMath>, EvaluationError> {
+    pub(crate) fn eval(&self, values: &HashMap<u16, Rc<dyn DynMath>>) -> Result<Box<dyn DynMath>, EvaluationError> {
         use ArithmeticOperator as AO;
 
         let get_val = |id| &*values[id];
