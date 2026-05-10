@@ -1,4 +1,3 @@
-use std::{collections::HashMap, collections::hash_map::Iter};
 use std::rc::Rc;
 // use crate::parser::{A};
 use crate::*;
@@ -18,10 +17,8 @@ impl MultiExpEvaluator {
         let mut evaluators = Vec::new();
         let mut temp_variables = Vec::new();
         for line in expression.lines() {
-            println!("{}", line); // !DEBUG
             match split_assignement(line) {
                 (None, Some(exp)) => {
-                    println!(">>>>{}", &exp); // !DEBUG
                     match parse_expr(&exp, &var) {
                         Ok(ast) => {
                             evaluators.push(Evaluator::from_ast(ast));
@@ -31,7 +28,6 @@ impl MultiExpEvaluator {
                     }
                 },
                 (Some(var_id), Some(exp)) => {
-                    println!(">>{}", &exp); // !DEBUG
                     match parse_expr(&exp, &var) {
                         Ok(ast) => {
                             evaluators.push(Evaluator::from_ast(ast));
@@ -42,7 +38,8 @@ impl MultiExpEvaluator {
                     }
                 },
                 _ => {
-                }
+                    // return Err here?
+                 }
             }
         }
 
@@ -65,9 +62,7 @@ impl MultiExpEvaluator {
             }
         }
         return match inputs.get(FINAL_RESULT_ALIAS) {
-            Some(res) => {
-                Ok(res.clone_boxed())
-            }
+            Some(res) => Ok(res.clone_boxed()),
             None => Err(EvaluationError::MissingFinalExpression)
         }
     }
