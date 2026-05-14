@@ -54,8 +54,7 @@ html, body {
     color: var(--color-base-content);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, Firacode Nerd Font;
     margin: 20px;
-    position: fixed;
-    overflow-y: scroll;
+    position: relative;
     padding: 0;
     margin: 0;
     width: 100%;
