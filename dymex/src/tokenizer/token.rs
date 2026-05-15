@@ -3,7 +3,7 @@ use std::fmt;
 
 const PISQUARED: Float = float::consts::PI*float::consts::PI;
 const SQRT3: Float = 1.73205080757; // .sqrt() is not const, const::SQRT_3 is unstable feature
-const SQRTPI: Float = 1.77245385091; // .sqrt() is not const 
+const SQRTPI: Float = 1.77245385091; // .sqrt() is not const
 
 
 /// Supported tokens and token categories
@@ -25,6 +25,7 @@ pub enum Token {
     Const(Constant),
     Var(String),
     Func(Function, usize),
+    Newline,
     Eof
 }
 
@@ -47,6 +48,7 @@ impl fmt::Display for Token {
             Token::Const(c) => write!(f, "{}", c),
             Token::Var(s) => write!(f, "{}", s),
             Token::Func(func, _) => write!(f, "{}", func),
+            Token::Newline => write!(f, "⏎"),
             Token::Eof => write!(f, "Eof"),
         }
     }
@@ -61,7 +63,7 @@ pub enum  ArithmeticOperator {
     Div,
     Rem,
     Pow,
-    Negate,    
+    Negate,
 }
 impl fmt::Display for ArithmeticOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

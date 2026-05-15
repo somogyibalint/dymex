@@ -1,3 +1,5 @@
+use std::ptr::dangling;
+
 /// Turn an expression string a stream of tokens
 ///
 ///
@@ -49,13 +51,21 @@ pub struct TokenStream {
     err: Option<TokenizerError>,
 }
 impl TokenStream {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
             tokens: vec!(),
             tokens_reversed: vec!(),
             expr: "".into(),
             var: vec!(),
             err: None
+        }
+    }
+
+    pub fn new(expression: &str, variables: &[&str] ) -> Result<Self, TokenizerError>  {
+        let mut instance = Self::empty();
+        match instance.update(expression, variables) {
+            Ok(_) => return Ok(instance),
+            Err(e) => return Err(e)
         }
     }
 
@@ -126,19 +136,36 @@ impl TokenStream {
 }
 
 
-/// Turns the string representation into token with additional context
-pub(super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
-
+pub (super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
     if let Err(e) = check_input_variables(variables) { return Err(e); }
     if let Err(e) = check_illegal_characters(input) { return Err(e); }
+
+    let mut res: Vec<TokenContext> = vec![];
+    let mut variables = variables.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
+    for line in input.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match &mut tokenize_line(line, &mut variables) {
+            Ok(ts) => {
+                res.append(ts);
+                res.push(TokenContext { token: Token::Newline, at: 0, len: 1 }); // newline position is discarded
+            },
+            Err(err) => return Err(err.clone())
+        }
+    }
+    res.pop_if(|tc| tc.token == Token::Newline);
+    Ok(res)
+}
+
+/// Turns the string representation into token with additional context
+pub(super) fn tokenize_line(input: &str, variables: &mut Vec<String>) -> Result<Vec<TokenContext>, TokenizerError> {
 
     let mut res: Vec<TokenContext> = vec![];
     let mut cursor = 0;
 
     let expression = input.chars().collect::<Vec<char>>();
 
-    // if let Some(next) = input.chars().nth(cursor) {
-    // let nextnext = input.chars().nth(cursor+1).unwrap_or(' ');
     loop {
         if let Some(next) = expression.get(cursor) {
             let nextnext = expression.get(cursor+1).unwrap_or(&' ');
@@ -324,7 +351,7 @@ fn is_ident_char(c: char) -> bool {
 fn parse_identifier(
     s: &[char],
     start:usize,
-    vars: &[&str],
+    vars: &mut Vec<String>,
     previous: Option<&TokenContext>
     ) -> Result<(Token, usize), TokenizerError> {
     let id_chars = match s.iter()
@@ -333,6 +360,11 @@ fn parse_identifier(
             Some((i_end, _) ) => &s[..i_end],
             None => &s,
         };
+    // seems unnecessary to alloc for up to 2 chars
+    let next2char = s[id_chars.len()..].iter()
+        .filter(|c| !c.is_whitespace())
+        .take(2).map(|&c|c).collect::<Vec<char>>();
+
     let id: String = id_chars.iter().collect();
     if let Some(func) = parse_function(&id) {
         return Ok((func, id_chars.len()));
@@ -340,7 +372,7 @@ fn parse_identifier(
     if let Some(constant) = parse_const(&id) {
         return Ok((constant, id_chars.len()));
     }
-    match parse_variable(&id, start, vars, previous) {
+    match parse_variable(&id, start, vars, previous, &next2char) {
         Ok(token) => return Ok((token, id_chars.len())),
         Err(err) => return Err(err)
     }
@@ -349,19 +381,33 @@ fn parse_identifier(
 fn parse_variable(
     word: &str,
     start: usize,
-    vars: &[&str],
-    prev: Option<&TokenContext>
+    vars: &mut Vec<String>,
+    prev: Option<&TokenContext>,
+    next2chars: &[char]
     ) -> Result<Token, TokenizerError> {
     // special case for fields: for `a.b`, only `a` needs to be a variable keys,
     // the existence of `b` can only be checked during evaluation.
     let after_dot = if let Some(prev_tc) = prev
     && prev_tc.token == Token::Dot { true } else { false};
-
-    match (after_dot, vars.contains(&word)) {
-        (true, _) => {Ok(Token::Var(word.into()))},
-        (_, true) => {Ok(Token::Var(word.into()))}
-        (_, _) => { return Err(TokenizerError::UndefinedVariable(start, word.into())) }
+    // special case for assignment:
+    //    `asd = ...` means that `asd` is not required to be in `vars`
+    //    `asd == ...` is not assignement
+    //    `asd =  ` is not assignement
+    let next1 = next2chars.get(0);
+    let next2 = next2chars.get(1);
+    let assignement = match (next1, next2) {
+        (Some('='), Some(c)) if *c != '=' => true,
+        _=> false
+    };
+    let word = word.to_string();
+    if assignement {
+        vars.push(word.clone());
+        return Ok(Token::Var(word));
     }
+    if after_dot || vars.contains(&word) {
+        return Ok(Token::Var(word));
+    }
+    Err(TokenizerError::UndefinedVariable(start, word.into()))
 }
 
 
@@ -447,32 +493,44 @@ mod tests {
 
     #[test]
     fn test_identifier() {
-        let input_vars = vec!("a", "center", "eV2nm");
+        let mut input_vars = vec!("a".to_string(), "center".to_string(), "eV2nm".to_string());
         let start = 13;
 
         let id = &charslice("max(15)");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_matches!(res, Ok((Token::Func(Function::Max, _), 3)) );
 
         let id = &charslice("_center");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_eq!(res, Err(TokenizerError::UndefinedVariable(start, "_center".into())) );
 
         let id = &charslice("center*5");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_eq!(res, Ok((Token::Var("center".into()), 6)));
 
         let id = &charslice("pi^2");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 2)));
 
         let id = &charslice("π^2");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 1)));
 
         let id = &charslice("eV2nm * λ");
-        let res = parse_identifier(id, start, &input_vars, None);
+        let res = parse_identifier(id, start, &mut input_vars, None);
         assert_eq!(res, Ok((Token::Var("eV2nm".into()), 5)));
+
+        // assignment:
+        let id1 = &charslice("new_var == 1 + center");
+        let res1 = parse_identifier(id1, start, &mut input_vars, None);
+        let id2 = &charslice("new_var = 1 + center");
+        let res2 = parse_identifier(id2, start, &mut input_vars, None);
+        let id3 = &charslice("new_var + center");
+        let res3 = parse_identifier(id3, start, &mut input_vars, None);
+        assert_eq!(res1, Err(TokenizerError::UndefinedVariable(start, "new_var".to_string())));
+        assert_eq!(res2, Ok((Token::Var("new_var".into()), 7)));
+        assert_eq!(res3, Ok((Token::Var("new_var".into()), 7)));
+
     }
 
     #[test]
@@ -547,9 +605,9 @@ mod tests {
 
     #[test]
     fn test_tokenstream1() {
-        let mut ts = TokenStream::new();
         let expr = "(1 + x) * 3";
-        let _ = ts.update(expr, &vec!["x"]).unwrap();
+        let ts = TokenStream::new(expr, &vec!["x"]).unwrap();
+
         for t in ts.tokens {
             println!("{}", t.token);
         }

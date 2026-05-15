@@ -83,11 +83,11 @@ fn split_assignement(exp: &str) -> (Option<String>, Option<String>) {
 }
 
 fn parse_expr(expression: &str, variables: &[String]) -> Result<AST, DymexError> {
-    let mut ts = TokenStream::new();
     let v = &variables.iter().map(|s| s.as_ref()).collect::<Vec<&str>>();
-    if let Err(err) =  ts.update(expression, v) {
-        return Err(DymexError::LexicalError(err))
-    }
+    let ts = match TokenStream::new(expression, v) {
+        Ok(ts) => ts,
+        Err(err) => return Err(DymexError::LexicalError(err))
+    };
     let mut ast = AST::new(ts);
     if let Err(err) = ast.parse_tokens() {
         return Err(DymexError::ParsingError(err));

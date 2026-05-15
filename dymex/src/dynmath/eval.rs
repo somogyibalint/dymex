@@ -16,10 +16,10 @@ pub struct Evaluator {
 // Evaluator every time the expression or variables change?
 impl Evaluator {
     pub fn new(expression: &str, variables: &[&str]) -> Result<Self, DymexError> {
-        let mut ts = TokenStream::new();
-        if let Err(err) =  ts.update(expression, variables) {
-            return Err(DymexError::LexicalError(err))
-        }
+        let ts = match TokenStream::new(expression, variables) {
+            Ok(ts) => ts,
+            Err(err) => return Err(DymexError::LexicalError(err))
+        };
         let mut ast = AST::new(ts);
         if let Err(err) = ast.parse_tokens() {
             return Err(DymexError::ParsingError(err));

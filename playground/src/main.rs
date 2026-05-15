@@ -75,7 +75,7 @@ fn App() -> Element {
         ])
     };
 
-    let mut tokenstream =  TokenStream::new();
+    let mut tokenstream =  TokenStream::empty();
     // let mut evaluator =  EvaluatorAdapter::new();
 
     let raw_expression = use_signal(|| START_EXPR.to_string());

@@ -10,7 +10,7 @@ use crate::{AST, Token, TokenContext, TokenStream};
 
 
 const MARKDOWN_PREVIEW : bool = false;
-const SIMPLE_HEADER: &str = 
+const SIMPLE_HEADER: &str =
 "---
 config:
   layout: elk
@@ -18,13 +18,13 @@ config:
   theme: light
 ---
 flowchart TB";
-const FANCY_HEADER: &str = 
+const FANCY_HEADER: &str =
 "---
 config:
   layout: elk
 ---
 flowchart TB";
-const CSS_HEADER: &str = 
+const CSS_HEADER: &str =
 "---
 config:
   layout: elk
@@ -35,16 +35,16 @@ flowchart TB";
 pub fn styled_ast_graph(ast: &Branch, style: &MermaidStyle) -> String {
     let mut m = MermaidGraph::from_ast(ast).with_style(style);
     m.to_string()
-} 
+}
 
 fn assign_mermaid_class(t: &Token) -> &str {
     match &t {
         Token::ArOp(_)
         |Token::RelOp(_)
         |Token::LogicOp(_)
-        |Token::AssignOp(_) 
+        |Token::AssignOp(_)
         |Token::Dot => "mmdOp",
-        Token::Number(_) 
+        Token::Number(_)
         |Token::Const(_) => "mmdConst",
         Token::Var(_) => "mmdVar",
         Token::Func(_, _) => "mmdFunc",
@@ -61,7 +61,7 @@ pub enum MermaidStyleEnum {
 
 #[derive(Clone)]
 pub struct MermaidStyle {
-    pub style: MermaidStyleEnum, 
+    pub style: MermaidStyleEnum,
     pub include_expr: bool,
     pub include_variables: bool,
     pub node_styles: HashMap<String, String>,
@@ -119,16 +119,15 @@ impl MermaidGraph {
         for v in vars {
             graph.variables.push(v.to_owned().to_owned());
         }
-        
-        let mut ts = TokenStream::new();
-        ts.update(&expr,&vars).unwrap(); //TODO eliminate this unwrap
+
+        let ts = TokenStream::new(&expr,&vars).unwrap(); //TODO eliminate this unwrap
         let mut ast = AST::new(ts);
         _ = ast.parse_tokens().unwrap();
 
         graph.ast = ast.tree;
         graph
     }
-    
+
     pub fn to_string(&mut self) -> String {
         // String does not implement std::io::Write
         // https://users.rust-lang.org/t/how-do-i-write-to-an-in-memory-buffered-string/45035/2
@@ -141,7 +140,7 @@ impl MermaidGraph {
         String::from_utf8(output).unwrap()
     }
 
-    pub fn write_to_buffer<T: Write>(&self, output: &mut T)-> std::io::Result<()> { 
+    pub fn write_to_buffer<T: Write>(&self, output: &mut T)-> std::io::Result<()> {
         self.write_header(output)?;
         self.write_expression(output)?;
         self.write_variables(output)?;
@@ -158,7 +157,7 @@ impl MermaidGraph {
     pub fn write_to_file(&mut self, path: &str) -> std::io::Result<()> {
         self.generate_graph();
         let mut output = File::create(path)?;
-        if MARKDOWN_PREVIEW { 
+        if MARKDOWN_PREVIEW {
             writeln!(output, "::: mermaid")?;
             self.write_to_buffer(&mut output)?;
             writeln!(output, ":::")?;
@@ -197,7 +196,7 @@ impl MermaidGraph {
             };
         }
         Ok(())
-        
+
     }
 
     fn write_classdef<T: Write>(&self, output: &mut T) -> std::io::Result<()> {
@@ -264,7 +263,7 @@ impl MermaidGraph {
 
     fn recurse_tree(&mut self, ast: &Branch) {
         match ast {
-            Branch::Atom(tc) => 
+            Branch::Atom(tc) =>
                 self.add_node(tc),
             Branch::Expression(tc_from, children) => {
                 self.add_node(tc_from);
@@ -284,7 +283,7 @@ impl MermaidGraph {
 #[cfg(test)]
 mod tests {
     use crate::*;
-    
+
     #[test]
     fn create_graph1() {
         let input_var = &["x", "y"];
