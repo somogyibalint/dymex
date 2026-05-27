@@ -121,8 +121,7 @@ impl MermaidGraph {
         }
 
         let ts = TokenStream::new(&expr,&vars).unwrap(); //TODO eliminate this unwrap
-        let mut ast = AST::new(ts);
-        _ = ast.parse_tokens().unwrap();
+        let ast = AST::new(ts).unwrap();
 
         graph.ast = ast.tree;
         graph

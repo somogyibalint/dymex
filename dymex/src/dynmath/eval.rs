@@ -20,12 +20,10 @@ impl Evaluator {
             Ok(ts) => ts,
             Err(err) => return Err(DymexError::LexicalError(err))
         };
-        let mut ast = AST::new(ts);
-        if let Err(err) = ast.parse_tokens() {
-            return Err(DymexError::ParsingError(err));
+        match AST::new(ts) {
+            Err(err) => Err(DymexError::ParsingError(err)),
+            Ok(ast) => Ok(Self::from_ast(ast))
         }
-
-        Ok(Self::from_ast(ast))
     }
 
     pub fn from_ast(ast: AST) -> Self {

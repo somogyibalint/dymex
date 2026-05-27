@@ -88,9 +88,9 @@ fn parse_expr(expression: &str, variables: &[String]) -> Result<AST, DymexError>
         Ok(ts) => ts,
         Err(err) => return Err(DymexError::LexicalError(err))
     };
-    let mut ast = AST::new(ts);
-    if let Err(err) = ast.parse_tokens() {
-        return Err(DymexError::ParsingError(err));
+
+    match AST::new(ts) {
+        Ok(ast) => Ok(ast),
+        Err(err) => Err(DymexError::ParsingError(err))
     }
-    Ok(ast)
 }

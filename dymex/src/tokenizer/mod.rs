@@ -1,5 +1,3 @@
-use std::ptr::dangling;
-
 /// Turn an expression string a stream of tokens
 ///
 ///

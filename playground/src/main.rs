@@ -137,28 +137,32 @@ fn App() -> Element {
 
         // parsing
         if let Ok(_) = lexer_result {
-            let mut ast = AST::new(tokenstream.clone());
-
-            match ast.parse_tokens() {
-                Ok(_) => {
+            match AST::new(tokenstream.clone()) {
+                Ok(ast) => {
                     parser_msg.set("✓".to_string());
                     if let Some(branch) = &ast.tree {
                         mermaid_script.set(styled_ast_graph(branch, &mmd_style));
                         latex_tex.set(format!("{}", branch.latex().replace("⋅", " ")));
+
                         valid_expression.set(true);
+                        evaluator.set(Some(Evaluator::from_ast(ast)));
                     }
                 },
                 Err(err) => {
                     parser_msg.set(err.user_message().full_message(&raw_expression()));
                     mermaid_script.set("".to_string());
                     latex_tex.set("".to_string());
+
+                    valid_expression.set(false);
+                    evaluator.set(None);
                 }
             }
-            if valid_expression() {
-                evaluator.set(Some(Evaluator::from_ast(ast)));
-            } else {
-                evaluator.set(None);
-            }
+            //? is valid_expression() still needed???
+            // if valid_expression() {
+            //     evaluator.set(Some(Evaluator::from_ast(ast)));
+            // } else {
+            //     evaluator.set(None);
+            // }
         } else {
             parser_msg.set("".to_string());
             mermaid_script.set("".to_string());

@@ -19,20 +19,15 @@ pub struct AST {
 }
 
 impl AST {
-    pub fn new(ts: TokenStream) -> Self {
-        Self {
-            ts,
-            tree: None
+    pub fn new(ts: TokenStream) -> Result<Self, ParsingError> {
+        let mut instance = Self {ts, tree: None };
+        match instance.parse_tokens() {
+            Ok(()) => Ok(instance),
+            Err(err) => Err(err)
         }
     }
 
-    pub fn update_tokens(&mut self, new_ts: TokenStream) {
-        if self.ts.identical(&new_ts) { return; }
-        self.ts = new_ts;
-        self.tree = None;
-    }
-
-    pub fn parse_tokens(&mut self) -> Result<(), ParsingError> {
+    fn parse_tokens(&mut self) -> Result<(), ParsingError> {
         if let Err(e) = self.check_parens() {
             return Err(e);
         }
@@ -44,6 +39,26 @@ impl AST {
             Ok(branch) => self.tree = Some(branch)
         }
         Ok(())
+    }
+
+    pub fn rpn_repr(&self) -> String {
+        match &self.tree {
+            Some(t) => t.as_rpn_str(),
+            None => "".into()
+        }
+    }
+
+    pub fn flatten_ast(&self) -> FlatAst {
+        let mut ast = FlatAst::new();
+        match &self.tree {
+            None => {
+                panic!("AST is empty!");
+            },
+            Some(branch) => {
+                traverse_ast(branch, &mut ast, 0);
+            }
+        }
+        ast
     }
 
     fn check_parens(&self) -> Result<(), ParsingError> {
@@ -80,26 +95,6 @@ impl AST {
             }
         }
         Ok(())
-    }
-
-    pub fn rpn_repr(&self) -> String {
-        match &self.tree {
-            Some(t) => t.as_rpn_str(),
-            None => "".into()
-        }
-    }
-
-    pub fn flatten_ast(&self) -> FlatAst {
-        let mut ast = FlatAst::new();
-        match &self.tree {
-            None => {
-                panic!("AST is empty!");
-            },
-            Some(branch) => {
-                traverse_ast(branch, &mut ast, 0);
-            }
-        }
-        ast
     }
 
 }
@@ -397,10 +392,12 @@ mod tests {
 
     fn test_parsing(expr: &str, var: &[&str], rpn: &str) {
         let ts = TokenStream::new(expr, var).unwrap();
-        let mut ast = AST::new(ts);
-        let success = ast.parse_tokens();
-        assert_matches!(success, Ok(()));
-        assert_eq!(ast.rpn_repr(), rpn);
+        match AST::new(ts) {
+            Err(err) => panic!("Parsing failed: {:?}", err),
+            Ok(ast) => {
+                assert_eq!(ast.rpn_repr(), rpn);
+            }
+        }
     }
 
     #[test]
@@ -467,9 +464,7 @@ mod tests {
         let expr = "x + max(0, sqrt(min(1,2,3,4)))";
         let var =  &vec!["x"];
         let ts = TokenStream::new(expr, var).unwrap();
-        let mut ast = AST::new(ts);
-        let _ = ast.parse_tokens();
-
+        let ast = AST::new(ts).unwrap();
         let flat_ast = ast.flatten_ast();
         println!("Expression: {}", expr);
         flat_ast.print_ast();
