@@ -75,7 +75,7 @@ fn App() -> Element {
         ])
     };
 
-    let mut tokenstream =  TokenStream::empty();
+    //let mut tokenstream =  TokenStream::empty(); // ! TODO remove this, delete ::empty() api
     // let mut evaluator =  EvaluatorAdapter::new();
 
     let raw_expression = use_signal(|| START_EXPR.to_string());
@@ -122,40 +122,33 @@ fn App() -> Element {
         let varnames: Vec<&str> = _v.iter().map(|(k, _)| k.as_ref()).collect();
 
         // lexing
-        let lexer_result = tokenstream.update(&raw_expression(), &varnames);
-        lexer_msg.set(
-            match &lexer_result {
-                Ok(_) => "✓".to_string(),
-                Err(err) => err.user_message().full_message(&raw_expression())
-            }
-        );
-        if let Ok(_) = lexer_result {
-            let varnames = tokenstream.variable_names();
-            referenced_variables.set(varnames);
-        }
-        tokens.set(tokenstream.tokens.clone());
+        match TokenStream::new(&raw_expression(), &varnames) {
+            Ok(tokenstream) => {
+                lexer_msg.set("✓".to_string());
 
-        // parsing
-        if let Ok(_) = lexer_result {
-            match AST::new(tokenstream.clone()) {
-                Ok(ast) => {
-                    parser_msg.set("✓".to_string());
-                    if let Some(branch) = &ast.tree {
-                        mermaid_script.set(styled_ast_graph(branch, &mmd_style));
-                        latex_tex.set(format!("{}", branch.latex().replace("⋅", " ")));
+                let varnames = tokenstream.variable_names();
+                referenced_variables.set(varnames);
+                tokens.set(tokenstream.tokens().into());
 
-                        valid_expression.set(true);
-                        evaluator.set(Some(Evaluator::from_ast(ast)));
+                match AST::new(tokenstream.clone()) {
+                    Ok(ast) => {
+                        parser_msg.set("✓".to_string());
+                        if let Some(branch) = &ast.tree {
+                            mermaid_script.set(styled_ast_graph(branch, &mmd_style));
+                            latex_tex.set(format!("{}", branch.latex().replace("⋅", " ")));
+
+                            valid_expression.set(true);
+                            evaluator.set(Some(Evaluator::from_ast(ast)));
+                        }
+                    },
+                    Err(err) => {
+                        parser_msg.set(err.user_message().full_message(&raw_expression()));
+                        mermaid_script.set("".to_string());
+                        latex_tex.set("".to_string());
+
+                        valid_expression.set(false);
+                        evaluator.set(None);
                     }
-                },
-                Err(err) => {
-                    parser_msg.set(err.user_message().full_message(&raw_expression()));
-                    mermaid_script.set("".to_string());
-                    latex_tex.set("".to_string());
-
-                    valid_expression.set(false);
-                    evaluator.set(None);
-                }
             }
             //? is valid_expression() still needed???
             // if valid_expression() {
@@ -163,9 +156,13 @@ fn App() -> Element {
             // } else {
             //     evaluator.set(None);
             // }
-        } else {
-            parser_msg.set("".to_string());
-            mermaid_script.set("".to_string());
+            }
+            Err(err) => {
+                lexer_msg.set(err.user_message().full_message(&raw_expression()));
+                tokens.clear();
+                parser_msg.set("".to_string());
+                mermaid_script.set("".to_string());
+            }
         }
     });
 

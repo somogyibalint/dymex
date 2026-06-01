@@ -38,14 +38,15 @@ impl TokenContext {
 
 
 
-/// Contains the original expression, the list of variable keys and the list
-/// of tokens in normal (for debugging) and reversed (for parsing) order.
+/// Contains the original single line expression, the list of variable keys
+/// and the list /// of tokens in normal (for debugging) and reversed (for
+/// parsing) order.
 #[derive(Debug, PartialEq, Clone)]
 pub struct TokenStream {
-    pub tokens: Vec<TokenContext>,
+    tokens: Vec<TokenContext>,
     tokens_reversed: Vec<TokenContext>,
     expr: String,
-    var: Vec<String>,
+    // var: Vec<String>,
     err: Option<TokenizerError>,
 }
 impl TokenStream {
@@ -54,7 +55,7 @@ impl TokenStream {
             tokens: vec!(),
             tokens_reversed: vec!(),
             expr: "".into(),
-            var: vec!(),
+            // var: vec!(),
             err: None
         }
     }
@@ -75,6 +76,10 @@ impl TokenStream {
         true
     }
 
+    pub fn tokens(&self) -> &[TokenContext] {
+        &self.tokens
+    }
+
     pub fn eof(&self) -> TokenContext {
         TokenContext { token: Token::Eof, at: self.expr.len(), len: 0 }
     }
@@ -88,15 +93,10 @@ impl TokenStream {
     }
 
     /// Update the expression and variable keys, tokenize the expression if changed
-    //TODO review `variables : &[&str]` PITA to use
-    pub fn update(&mut self, expression: &str, variables: &[&str] )
+    pub fn update<S: AsRef<str>>(&mut self, expression: &str, variables: &[S] )
     -> Result<(), TokenizerError> {
-        // maybe save last Err so we can return it:
-        // if self.expr == expression && self.var == variables {return ???}
-
         self.expr = expression.into();
-        self.var = variables.iter().copied().map(|s| s.into()).collect();
-        self.tokenize()
+        self.tokenize(variables)
     }
 
     /// Return the names of the variables referenced in the expression
@@ -114,9 +114,9 @@ impl TokenStream {
         vars
     }
 
-    fn tokenize(&mut self) -> Result<(), TokenizerError> {
-        let vars : Vec<&str> = self.var.iter().map(|s| s as &str).collect();
-        let res = tokenize(&self.expr, &vars);
+    fn tokenize<S: AsRef<str>>(&mut self, variables: &[S]) -> Result<(), TokenizerError> {
+        let mut vars : Vec<String> = variables.iter().map(|s| s.as_ref().to_string()).collect();
+        let res = tokenize_line(&self.expr, &mut vars);
         match res {
             Ok(v) => {
                 self.tokens = v.clone();
@@ -131,14 +131,30 @@ impl TokenStream {
             }
         }
     }
+
+    fn num_lines(&self) -> usize {
+        1 + self.tokens.iter().filter(|&tc| tc.token == Token::Newline).count()
+    }
 }
 
 
-pub (super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
+#[derive(Debug, PartialEq, Clone)]
+pub struct TokenizedLines {
+    lines: Vec<TokenStream>
+}
+impl TokenizedLines {
+
+    pub fn lines(&self) -> &[TokenStream] {
+        &self.lines
+    }
+}
+
+pub (super) fn tokenize_lines(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
     if let Err(e) = check_input_variables(variables) { return Err(e); }
     if let Err(e) = check_illegal_characters(input) { return Err(e); }
 
-    let mut res: Vec<TokenContext> = vec![];
+
+    let mut tokens = Vec::new();
     let mut variables = variables.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
     for line in input.lines() {
         if line.trim().is_empty() {
@@ -146,17 +162,17 @@ pub (super) fn tokenize(input: &str, variables: &[&str]) -> Result<Vec<TokenCont
         }
         match &mut tokenize_line(line, &mut variables) {
             Ok(ts) => {
-                res.append(ts);
-                res.push(TokenContext { token: Token::Newline, at: 0, len: 1 }); // newline position is discarded
+                tokens.append(ts);
+                tokens.push(TokenContext { token: Token::Newline, at: 0, len: 1 }); // newline position is discarded
             },
             Err(err) => return Err(err.clone())
         }
     }
-    res.pop_if(|tc| tc.token == Token::Newline);
-    Ok(res)
+    tokens.pop_if(|tc| tc.token == Token::Newline);
+    Ok(tokens)
 }
 
-/// Turns the string representation into token with additional context
+/// Turns the string representation fo a single line into tokens with additional context
 pub(super) fn tokenize_line(input: &str, variables: &mut Vec<String>) -> Result<Vec<TokenContext>, TokenizerError> {
 
     let mut res: Vec<TokenContext> = vec![];
@@ -545,9 +561,9 @@ mod tests {
         Token::LP, Token::Number(1.0), Token::ArOp(ArithmeticOperator::Plus), Token::Func(Function::Sqrt, 1),
         Token::LP, Token::Var("y".into()), Token::RP, Token::Comma, Token::Number(0.0), Token::RP];
 
-        let res1 = tokenize(expr1, input_var).unwrap();
-        let res2 = tokenize(expr2, input_var).unwrap();
-        let res3 = tokenize(expr3, input_var).unwrap();
+        let res1 = tokenize_lines(expr1, input_var).unwrap();
+        let res2 = tokenize_lines(expr2, input_var).unwrap();
+        let res3 = tokenize_lines(expr3, input_var).unwrap();
         assert!(same_tokens(&unwrap_contexts(&res1), target));
         assert!(same_tokens(&unwrap_contexts(&res2), target));
         assert!(same_tokens(&unwrap_contexts(&res3), target));
@@ -557,7 +573,7 @@ mod tests {
     fn test_tokenizer_expr2() {
         let input_var = &["spectrum"];
         let expr = "spectrum.x[-1] - spectrum.x[0]";
-        let res = tokenize(expr, input_var).unwrap();
+        let res = tokenize_lines(expr, input_var).unwrap();
         let target = &[Token::Var("spectrum".into()), Token::Dot,
             Token::Var("x".into()), Token::LB, Token::Number(-1.0), Token::RB,
             Token::ArOp(ArithmeticOperator::Minus), Token::Var("spectrum".into()),
@@ -574,8 +590,8 @@ mod tests {
         let expr2 = "b.a"; // error
         let target1 = &[Token::Var("a".into()), Token::Dot, Token::Var("b".into())];
 
-        let res1 = tokenize(expr1, input_var).unwrap();
-        let res2 = tokenize(expr2, input_var);
+        let res1 = tokenize_lines(expr1, input_var).unwrap();
+        let res2 = tokenize_lines(expr2, input_var);
         assert!(same_tokens(&unwrap_contexts(&res1), target1));
         assert_matches!(res2, Err(TokenizerError::UndefinedVariable(_, _)));
     }
@@ -588,7 +604,7 @@ mod tests {
             Token::Number(0.0), Token::Colon, Token::Number(-1.0), Token::RB
             ];
 
-        let res = tokenize(expr, input_var).unwrap();
+        let res = tokenize_lines(expr, input_var).unwrap();
         assert!(same_tokens(&unwrap_contexts(&res), target));
     }
 

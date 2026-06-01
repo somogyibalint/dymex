@@ -63,7 +63,7 @@ impl AST {
 
     fn check_parens(&self) -> Result<(), ParsingError> {
         let mut n: i32 = 0;
-        for tc in &self.ts.tokens {
+        for tc in self.ts.tokens() {
             let token = &tc.token;
             match token {
                 Token::LP => n += 1,
@@ -79,7 +79,7 @@ impl AST {
     }
 
     fn check_tokens(&self) -> Result<(), ParsingError> {
-        for tc in &self.ts.tokens {
+        for tc in self.ts.tokens() {
             let token = &tc.token;
             match token {
                 Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
@@ -98,6 +98,30 @@ impl AST {
     }
 
 }
+
+
+/// Abstract syntax tree series
+// #[derive(Clone)]
+// pub struct ASTSeries {
+//     ts: TokenStream,
+//     pub tree: Vec<Branch>
+// }
+
+// impl ASTSeries {
+//     pub fn new(ts: TokenStream) -> Result<Self, ParsingError> {
+//         let mut instance = Self {ts, tree: Vec::new() };
+//         match instance.parse_tokens() {
+//                 Ok(()) => Ok(instance),
+//                 Err(err) => Err(err)
+//         }
+//     }
+
+//     fn parse_tokens(&mut self) -> Result<(), ParsingError> {
+//         for line in self.ts.lines() {
+
+//         }
+//     }
+// }
 
 
 /// Resursive data structure for the AST
