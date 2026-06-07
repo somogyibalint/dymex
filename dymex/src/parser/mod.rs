@@ -1,8 +1,8 @@
 /// Turn a stream of tokens into an anstract syntax tree
 
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::{HashMap, VecDeque}, env::var, fmt::Write, marker::PhantomData, ops::ControlFlow::Break, path::Iter, process::Child};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
+use crate::{ArithmeticOperator, AssignmentOperator, Branch::Atom, Token, TokenContext, TokenStream};
 
 mod latex;
 pub use latex::*;
@@ -15,12 +15,13 @@ pub use mermaid::*;
 #[derive(Clone)]
 pub struct AST {
     ts: TokenStream,
-    pub tree: Option<Branch>
+    pub tree: Option<Branch>, // TODO does this need to be an option?? what is the use for None?
+    pub assigned_to: Option<String>
 }
 
 impl AST {
     pub fn new(ts: TokenStream) -> Result<Self, ParsingError> {
-        let mut instance = Self {ts, tree: None };
+        let mut instance = Self {ts, tree: None, assigned_to: None };
         match instance.parse_tokens() {
             Ok(()) => Ok(instance),
             Err(err) => Err(err)
@@ -38,6 +39,9 @@ impl AST {
             Err(e) => return Err(e),
             Ok(branch) => self.tree = Some(branch)
         }
+        // check assignements
+        // check variables
+
         Ok(())
     }
 
@@ -78,18 +82,30 @@ impl AST {
         }
     }
 
+    // fn check_assigment(&mut self) -> Result<(), ParsingError> {
+    //     if let Some(tree) = &self.tree {
+    //         match tree {
+    //             Branch::Atom(tc) => {
+
+    //             }
+    //             Branch::Expression(tc, children )
+    //         }
+    //     }
+    //     Ok(())
+    // }
+
     fn check_tokens(&self) -> Result<(), ParsingError> {
         for tc in self.ts.tokens() {
             let token = &tc.token;
             match token {
                 Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
-                    return Err(ParsingError::InvalidOperation(tc.at, "Only simple assignment is allowed.".into()));
+                    return Err(ParsingError::InvalidOperation(tc.at, "Only simple assignment is implemented.".into()));
                 }
                 Token::LogicOp(_) => {
-                    return Err(ParsingError::InvalidOperation(tc.at, "Logical operators are not allowed.".into()));
+                    return Err(ParsingError::InvalidOperation(tc.at, "Logical operators are not implemented.".into()));
                 }
                 Token::RelOp(_) => {
-                    return Err(ParsingError::InvalidOperation(tc.at, "Comparison operators are not allowed.".into()));
+                    return Err(ParsingError::InvalidOperation(tc.at, "Comparison operators are not implemented.".into()));
                 }
                 _ => {}
             }
@@ -97,6 +113,22 @@ impl AST {
         Ok(())
     }
 
+    fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
+        let variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
+        if let Some(tree) = &self.tree {
+            for t in tree.iter_dfs() {
+                match &t.tc().token {
+                    Token::Var(varname) => {
+                        if !variables.contains(&varname.as_str()) {
+                            return Err(ParsingError::NotImplemented("todo!".to_string()));
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 
@@ -172,6 +204,13 @@ impl Branch {
         print!("\r\n");
     }
 
+    pub fn tc(&self) -> &TokenContext {
+        match self {
+            Branch::Atom(tc) => &tc,
+            Branch::Expression(tc, _) => &tc
+        }
+    }
+
     fn recurse_tree_rpn(&self, s: &mut String) -> String {
         match self {
             Self::Atom(tc) => write!(s, "{}", tc.token).unwrap(),
@@ -181,15 +220,80 @@ impl Branch {
                     branch.recurse_tree_rpn(s);
                     write!(s, ", ").unwrap();
                 }
-                s.pop(); s.pop();
+                s.pop(); s.pop(); // remove trailing ", "
                 write!(s, ")").unwrap()
             }
         }
         s.clone()
     }
 
+    fn iter_dfs(&self) -> DFSBranchIter<'_>
+    where
+    Self: Sized,
+    {
+        DFSBranchIter::new(self)
+    }
+
+    fn iter_bfs(&self) -> BFSBranchIter<'_>
+    where
+    Self: Sized,
+    {
+        BFSBranchIter::new(self)
+    }
 
 }
+
+
+
+pub struct DFSBranchIter<'a> {
+    queue: VecDeque<&'a Branch>,
+}
+pub struct BFSBranchIter<'a> {
+    queue: VecDeque<&'a Branch>,
+}
+
+impl<'a> DFSBranchIter<'a> {
+    pub fn new(root: &'a Branch) -> Self {
+        Self { queue: VecDeque::from(vec![root]) }
+    }
+}
+impl<'a> BFSBranchIter<'a> {
+    pub fn new(root: &'a Branch) -> Self {
+        Self { queue: VecDeque::from(vec![root]) }
+    }
+}
+
+impl<'a,> Iterator for BFSBranchIter<'a> {
+    type Item = &'a Branch;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let branch = self.queue.pop_front()?;
+        match branch {
+            Branch::Atom(_) => {},
+            Branch::Expression(_, children) => {
+                self.queue.extend(children);
+            }
+        }
+        Some(branch)
+    }
+}
+
+impl<'a,> Iterator for DFSBranchIter<'a> {
+    type Item = &'a Branch;
+    fn next(&mut self) -> Option<Self::Item> {
+        let branch = self.queue.pop_front()?;
+        match branch {
+            Branch::Atom(_) => {},
+            Branch::Expression(_, children)  => {
+                for child in children.iter().rev() {
+                    self.queue.push_front(child);
+                }
+            },
+        }
+        Some(branch)
+    }
+}
+
 
 
 /// This function build the AST from the provided TokenStream
@@ -211,7 +315,7 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
         Token::LP => {
             let res = pratt_parser(ts, 0);
             match res {
-                Ok(lhs) if ts.next().token == Token::RP =>  lhs,
+                Ok(lhs) if ts.next().token == Token::RP => lhs,
                 Ok(_) => return Err(ParsingError::MissingRP(1)), // ! FIXME:
                 Err(e) => return Err(e),
             }
@@ -411,11 +515,13 @@ fn traverse_ast(branch: &Branch, ast: &mut FlatAst, parent: u8) {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use std::assert_matches;
+
+use crate::*;
     use super::Branch;
 
     fn test_parsing(expr: &str, var: &[&str], rpn: &str) {
-        let ts = TokenStream::new(expr, var).unwrap();
+        let ts = TokenStream::new(expr).unwrap();
         match AST::new(ts) {
             Err(err) => panic!("Parsing failed: {:?}", err),
             Ok(ast) => {
@@ -487,11 +593,73 @@ mod tests {
     fn test_flattened_ast() {
         let expr = "x + max(0, sqrt(min(1,2,3,4)))";
         let var =  &vec!["x"];
-        let ts = TokenStream::new(expr, var).unwrap();
+        let ts = TokenStream::new(expr).unwrap();
         let ast = AST::new(ts).unwrap();
         let flat_ast = ast.flatten_ast();
         println!("Expression: {}", expr);
         flat_ast.print_ast();
     }
+
+    #[test]
+    fn test_iter_ast() {
+        let expr = "(1 - y)*max(0.0, 4.0, z**2) + x/3";
+        let ts = TokenStream::new(expr).unwrap();
+        let tree = AST::new(ts).unwrap().tree.unwrap();
+
+        // breadth first
+        let expected_bfs = vec![
+            Token::ArOp(ArithmeticOperator::Plus),
+            Token::ArOp(ArithmeticOperator::Mul),
+            Token::ArOp(ArithmeticOperator::Div),
+            Token::ArOp(ArithmeticOperator::Minus),
+            Token::Func(Function::Max, 64),
+            Token::Var("x".to_string()),
+            Token::Number(3f64),
+            Token::Number(1f64),
+            Token::Var("y".to_string()),
+            Token::Number(0f64),
+            Token::Number(4f64),
+            Token::ArOp(ArithmeticOperator::Pow),
+            Token::Var("z".to_string()),
+            Token::Number(2f64),
+        ];
+        let result_bfs : Vec<Token>= tree.iter_bfs().map(|b| b.tc().token.clone()).collect();
+        assert_eq!(expected_bfs, result_bfs);
+
+        // depth first
+        let expected_dfs = vec![
+            Token::ArOp(ArithmeticOperator::Plus),
+            Token::ArOp(ArithmeticOperator::Mul),
+            Token::ArOp(ArithmeticOperator::Minus),
+            Token::Number(1f64),
+            Token::Var("y".to_string()),
+            Token::Func(Function::Max, 64), // TODO
+            Token::Number(0f64),
+            Token::Number(4f64),
+            Token::ArOp(ArithmeticOperator::Pow),
+            Token::Var("z".to_string()),
+            Token::Number(2f64),
+            Token::ArOp(ArithmeticOperator::Div),
+            Token::Var("x".to_string()),
+            Token::Number(3f64),
+        ];
+        let result_dfs : Vec<Token>= tree.iter_dfs().map(|b| b.tc().token.clone()).collect();
+        assert_eq!(expected_dfs, result_dfs);
+
+    }
+
+    #[test]
+    fn test_check_input_vars() {
+        let expr = "x + 2*y";
+        let ts = TokenStream::new(expr).unwrap();
+        let ast = AST::new(ts).unwrap();
+        let result_ok = ast.check_input_vars(&["x", "y"]);
+        let result_fail = ast.check_input_vars(&["x"]);
+
+        assert_matches!(result_ok,  Ok(()));
+        assert_matches!(result_fail, Err(ParsingError::NotImplemented(_))); // TODO
+    }
+
+
 
 }

@@ -120,7 +120,7 @@ impl MermaidGraph {
             graph.variables.push(v.to_owned().to_owned());
         }
 
-        let ts = TokenStream::new(&expr,&vars).unwrap(); //TODO eliminate this unwrap
+        let ts = TokenStream::new(&expr).unwrap(); //TODO eliminate this unwrap
         let ast = AST::new(ts).unwrap();
 
         graph.ast = ast.tree;
@@ -293,5 +293,17 @@ mod tests {
             panic!("Cannot write graph: {}", e)
         };
     }
+
+    #[test]
+    fn create_assignment() {
+        let input_var = &["x", "y"];
+        let expr = "z = x+y";
+        let mut graph = MermaidGraph::from_expr(expr.into(), input_var);
+
+        if let Err(e) = graph.write_to_file("../mermaid/mermaid_graph2.mmd") {
+            panic!("Cannot write graph: {}", e)
+        };
+    }
+
 
 }

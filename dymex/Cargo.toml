@@ -8,8 +8,6 @@ colored = "3.0"
 thiserror = "2.0.12"
 itertools = "*"
 
-[dev-dependencies]
-assert_matches = "1.5"
 
 [features]
 default = []

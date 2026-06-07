@@ -122,7 +122,7 @@ fn App() -> Element {
         let varnames: Vec<&str> = _v.iter().map(|(k, _)| k.as_ref()).collect();
 
         // lexing
-        match TokenStream::new(&raw_expression(), &varnames) {
+        match TokenStream::new(&raw_expression()) {
             Ok(tokenstream) => {
                 lexer_msg.set("✓".to_string());
 

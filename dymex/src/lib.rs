@@ -11,9 +11,6 @@ use std::f32 as float;
 type Float = f32;
 
 
-#[cfg(test)] #[macro_use]
-extern crate assert_matches;
-
 mod tokenizer;
 #[allow(unused_imports)]
 pub use crate::tokenizer::*;

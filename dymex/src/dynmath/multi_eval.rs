@@ -84,7 +84,7 @@ fn split_assignement(exp: &str) -> (Option<String>, Option<String>) {
 
 fn parse_expr(expression: &str, variables: &[String]) -> Result<AST, DymexError> {
     let v = &variables.iter().map(|s| s.as_ref()).collect::<Vec<&str>>();
-    let ts = match TokenStream::new(expression, v) {
+    let ts = match TokenStream::new(expression) {
         Ok(ts) => ts,
         Err(err) => return Err(DymexError::LexicalError(err))
     };

@@ -91,7 +91,7 @@ mod test_numbers {
     #[test]
     fn test_number_errors1() {
         let expr = "y*(x + 12.34.5)";
-        let res = tokenize_lines(expr, &["x", "y"]);
+        let res = tokenize_lines(expr);
         if let Err(e) = res {
             assert!(matches!(e, crate::TokenizerError::InvalidNumberFormat(7)));
             print!("{}", e.user_message());
@@ -101,7 +101,7 @@ mod test_numbers {
     #[test]
     fn test_number_errors2() {
         let expr = "   12.34e-x";
-        let res = tokenize_lines(expr, &["x"]);
+        let res = tokenize_lines(expr);
         if let Err(e) = res {
             assert!(matches!(e, crate::TokenizerError::InvalidNumberFormat(3)));
             print!("{}", e.user_message());

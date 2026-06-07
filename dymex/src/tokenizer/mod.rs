@@ -1,7 +1,6 @@
 /// Turn an expression string a stream of tokens
 ///
 ///
-
 use crate::Float;
 
 mod token;
@@ -46,23 +45,16 @@ pub struct TokenStream {
     tokens: Vec<TokenContext>,
     tokens_reversed: Vec<TokenContext>,
     expr: String,
-    // var: Vec<String>,
-    err: Option<TokenizerError>,
 }
 impl TokenStream {
-    pub fn empty() -> Self {
-        Self {
-            tokens: vec!(),
-            tokens_reversed: vec!(),
-            expr: "".into(),
-            // var: vec!(),
-            err: None
-        }
-    }
 
-    pub fn new(expression: &str, variables: &[&str] ) -> Result<Self, TokenizerError>  {
-        let mut instance = Self::empty();
-        match instance.update(expression, variables) {
+    pub fn new(expression: &str) -> Result<Self, TokenizerError>  {
+        let mut instance = Self {
+            tokens: Vec::new(),
+            tokens_reversed: Vec::new(),
+            expr: expression.into()
+        };
+        match instance.update(expression) {
             Ok(_) => return Ok(instance),
             Err(e) => return Err(e)
         }
@@ -93,10 +85,10 @@ impl TokenStream {
     }
 
     /// Update the expression and variable keys, tokenize the expression if changed
-    pub fn update<S: AsRef<str>>(&mut self, expression: &str, variables: &[S] )
+    pub fn update(&mut self, expression: &str)
     -> Result<(), TokenizerError> {
         self.expr = expression.into();
-        self.tokenize(variables)
+        self.tokenize()
     }
 
     /// Return the names of the variables referenced in the expression
@@ -114,9 +106,8 @@ impl TokenStream {
         vars
     }
 
-    fn tokenize<S: AsRef<str>>(&mut self, variables: &[S]) -> Result<(), TokenizerError> {
-        let mut vars : Vec<String> = variables.iter().map(|s| s.as_ref().to_string()).collect();
-        let res = tokenize_line(&self.expr, &mut vars);
+    fn tokenize(&mut self) -> Result<(), TokenizerError> {
+        let res = tokenize_line(&self.expr);
         match res {
             Ok(v) => {
                 self.tokens = v.clone();
@@ -149,18 +140,17 @@ impl TokenizedLines {
     }
 }
 
-pub (super) fn tokenize_lines(input: &str, variables: &[&str]) -> Result<Vec<TokenContext>, TokenizerError> {
-    if let Err(e) = check_input_variables(variables) { return Err(e); }
+pub (super) fn tokenize_lines(input: &str) -> Result<Vec<TokenContext>, TokenizerError> {
+    // if let Err(e) = check_input_variables(variables) { return Err(e); }
     if let Err(e) = check_illegal_characters(input) { return Err(e); }
 
 
     let mut tokens = Vec::new();
-    let mut variables = variables.iter().map(|&s| s.to_string()).collect::<Vec<String>>();
     for line in input.lines() {
         if line.trim().is_empty() {
             continue;
         }
-        match &mut tokenize_line(line, &mut variables) {
+        match &mut tokenize_line(line) {
             Ok(ts) => {
                 tokens.append(ts);
                 tokens.push(TokenContext { token: Token::Newline, at: 0, len: 1 }); // newline position is discarded
@@ -173,7 +163,7 @@ pub (super) fn tokenize_lines(input: &str, variables: &[&str]) -> Result<Vec<Tok
 }
 
 /// Turns the string representation fo a single line into tokens with additional context
-pub(super) fn tokenize_line(input: &str, variables: &mut Vec<String>) -> Result<Vec<TokenContext>, TokenizerError> {
+pub(super) fn tokenize_line(input: &str) -> Result<Vec<TokenContext>, TokenizerError> {
 
     let mut res: Vec<TokenContext> = vec![];
     let mut cursor = 0;
@@ -186,7 +176,7 @@ pub(super) fn tokenize_line(input: &str, variables: &mut Vec<String>) -> Result<
             if next.is_whitespace() {
                 cursor +=1;
             } else if next.is_alphabetic() || *next == '_' {
-                match parse_identifier(&expression[cursor..], cursor, variables, res.last()) {
+                match parse_identifier(&expression[cursor..]) {
                     Ok((t, wordsize)) => {
                         res.push(TokenContext { token: t, at: cursor, len: wordsize });
                         cursor += wordsize;
@@ -236,7 +226,8 @@ fn check_illegal_characters(s: &str) -> Result<(), TokenizerError>{
 }
 
 /// Check if there is an input variable with name that collides with reserved words.
-fn check_input_variables(variables: &[&str]) -> Result<(), TokenizerError> {
+// TODO move to parser
+fn check_input_variables__(variables: &[&str]) -> Result<(), TokenizerError> {
     for var_name in variables {
         if FORBIDDEN_IDS.contains(var_name) {
             return Err(TokenizerError::InvalidVariableName((*var_name).into(), VARNAME_ERR1));
@@ -362,12 +353,7 @@ fn is_ident_char(c: char) -> bool {
 /// variable, or UndefinedVariable error. The `start` parameter is only
 /// needed for error reporting. The previous token needs to be provided
 /// to allow `a.b` even if `b` is not a user defined variable.
-fn parse_identifier(
-    s: &[char],
-    start:usize,
-    vars: &mut Vec<String>,
-    previous: Option<&TokenContext>
-    ) -> Result<(Token, usize), TokenizerError> {
+fn parse_identifier(s: &[char]) -> Result<(Token, usize), TokenizerError> {
     let id_chars = match s.iter()
         .enumerate()
         .filter(|(_, c)| !is_ident_char(**c)).next() {
@@ -375,9 +361,9 @@ fn parse_identifier(
             None => &s,
         };
     // seems unnecessary to alloc for up to 2 chars
-    let next2char = s[id_chars.len()..].iter()
-        .filter(|c| !c.is_whitespace())
-        .take(2).map(|&c|c).collect::<Vec<char>>();
+    // let next2char = s[id_chars.len()..].iter()
+    //     .filter(|c| !c.is_whitespace())
+    //     .take(2).map(|&c|c).collect::<Vec<char>>();
 
     let id: String = id_chars.iter().collect();
     if let Some(func) = parse_function(&id) {
@@ -386,13 +372,15 @@ fn parse_identifier(
     if let Some(constant) = parse_const(&id) {
         return Ok((constant, id_chars.len()));
     }
-    match parse_variable(&id, start, vars, previous, &next2char) {
-        Ok(token) => return Ok((token, id_chars.len())),
-        Err(err) => return Err(err)
-    }
+    Ok((Token::Var(id), id_chars.len()))
+    // match parse_variable(&id, start, previous, &next2char) {
+    //     Ok(token) => return Ok((token, id_chars.len())),
+    //     Err(err) => return Err(err)
+    // }
 }
 
-fn parse_variable(
+
+fn parse_variable_old( // TODO delete
     word: &str,
     start: usize,
     vars: &mut Vec<String>,
@@ -470,6 +458,7 @@ pub(super) fn charslice(s: &str) -> Vec<char> {
 mod tests {
     use crate::TokenizerError;
     use super::*;
+    use std::assert_matches;
 
     fn same_tokens(tokens1 : &[Token], tokens2 : &[Token]) -> bool {
         if tokens1.len() != tokens2.len() {return false;}
@@ -481,11 +470,11 @@ mod tests {
     }
 
     // TODO: move to err
-    #[test]
-    fn test_invalid_names() {
-        assert_eq!(check_input_variables(&["pi"]), Err(TokenizerError::InvalidVariableName("pi".into(), VARNAME_ERR1)));
-        assert_eq!(check_input_variables(&["ip"]), Ok(()));
-    }
+    // #[test]
+    // fn test_invalid_names() {
+    //     assert_eq!(check_input_variables(&["pi"]), Err(TokenizerError::InvalidVariableName("pi".into(), VARNAME_ERR1)));
+    //     assert_eq!(check_input_variables(&["ip"]), Ok(()));
+    // }
 
     // TODO: move to err
     #[test]
@@ -507,49 +496,46 @@ mod tests {
 
     #[test]
     fn test_identifier() {
-        let mut input_vars = vec!("a".to_string(), "center".to_string(), "eV2nm".to_string());
-        let start = 13;
-
         let id = &charslice("max(15)");
-        let res = parse_identifier(id, start, &mut input_vars, None);
+        let res = parse_identifier(id);
         assert_matches!(res, Ok((Token::Func(Function::Max, _), 3)) );
 
         let id = &charslice("_center");
-        let res = parse_identifier(id, start, &mut input_vars, None);
-        assert_eq!(res, Err(TokenizerError::UndefinedVariable(start, "_center".into())) );
+        let res = parse_identifier(id);
+        assert_eq!(res, Ok((Token::Var("_center".into()), 7)));
 
         let id = &charslice("center*5");
-        let res = parse_identifier(id, start, &mut input_vars, None);
+        let res = parse_identifier(id);
         assert_eq!(res, Ok((Token::Var("center".into()), 6)));
 
         let id = &charslice("pi^2");
-        let res = parse_identifier(id, start, &mut input_vars, None);
+        let res = parse_identifier(id);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 2)));
 
         let id = &charslice("π^2");
-        let res = parse_identifier(id, start, &mut input_vars, None);
+        let res = parse_identifier(id);
         assert_eq!(res, Ok((Token::Const(Constant::Pi), 1)));
 
         let id = &charslice("eV2nm * λ");
-        let res = parse_identifier(id, start, &mut input_vars, None);
+        let res = parse_identifier(id);
         assert_eq!(res, Ok((Token::Var("eV2nm".into()), 5)));
 
         // assignment:
-        let id1 = &charslice("new_var == 1 + center");
-        let res1 = parse_identifier(id1, start, &mut input_vars, None);
-        let id2 = &charslice("new_var = 1 + center");
-        let res2 = parse_identifier(id2, start, &mut input_vars, None);
-        let id3 = &charslice("new_var + center");
-        let res3 = parse_identifier(id3, start, &mut input_vars, None);
-        assert_eq!(res1, Err(TokenizerError::UndefinedVariable(start, "new_var".to_string())));
-        assert_eq!(res2, Ok((Token::Var("new_var".into()), 7)));
-        assert_eq!(res3, Ok((Token::Var("new_var".into()), 7)));
+        // let id1 = &charslice("new_var == 1 + center");
+        // let res1 = parse_identifier(id1, start, &mut input_vars, None);
+        // let id2 = &charslice("new_var = 1 + center");
+        // let res2 = parse_identifier(id2, start, &mut input_vars, None);
+        // let id3 = &charslice("new_var + center");
+        // let res3 = parse_identifier(id3, start, &mut input_vars, None);
+        // assert_eq!(res1, Err(TokenizerError::UndefinedVariable(start, "new_var".to_string())));
+        // assert_eq!(res2, Ok((Token::Var("new_var".into()), 7)));
+        // assert_eq!(res3, Ok((Token::Var("new_var".into()), 7)));
 
     }
 
     #[test]
     fn test_tokenizer_expr1() {
-        let input_var = &["x", "y"];
+        // let input_var = &["x", "y"];
         let expr1 = "(2.0*pi * exp(-x*x)) / max(1.0 + sqrt(y), 0)";
         let expr2 = "(2.0*pi*exp(-x*x))/max(1.0+sqrt(y),0)";
         let expr3 = "(2.0 * pi *exp( -x * x)) / max(1.0 + sqrt(y), 0)   ";
@@ -561,9 +547,9 @@ mod tests {
         Token::LP, Token::Number(1.0), Token::ArOp(ArithmeticOperator::Plus), Token::Func(Function::Sqrt, 1),
         Token::LP, Token::Var("y".into()), Token::RP, Token::Comma, Token::Number(0.0), Token::RP];
 
-        let res1 = tokenize_lines(expr1, input_var).unwrap();
-        let res2 = tokenize_lines(expr2, input_var).unwrap();
-        let res3 = tokenize_lines(expr3, input_var).unwrap();
+        let res1 = tokenize_lines(expr1).unwrap();
+        let res2 = tokenize_lines(expr2).unwrap();
+        let res3 = tokenize_lines(expr3).unwrap();
         assert!(same_tokens(&unwrap_contexts(&res1), target));
         assert!(same_tokens(&unwrap_contexts(&res2), target));
         assert!(same_tokens(&unwrap_contexts(&res3), target));
@@ -571,9 +557,8 @@ mod tests {
 
     #[test]
     fn test_tokenizer_expr2() {
-        let input_var = &["spectrum"];
         let expr = "spectrum.x[-1] - spectrum.x[0]";
-        let res = tokenize_lines(expr, input_var).unwrap();
+        let res = tokenize_lines(expr).unwrap();
         let target = &[Token::Var("spectrum".into()), Token::Dot,
             Token::Var("x".into()), Token::LB, Token::Number(-1.0), Token::RB,
             Token::ArOp(ArithmeticOperator::Minus), Token::Var("spectrum".into()),
@@ -583,28 +568,28 @@ mod tests {
         assert!(same_tokens(&unwrap_contexts(&res), target));
     }
 
-    #[test]
-    fn test_tokenizer_expr3() {
-        let input_var = &["a"];
-        let expr1 = "a.b"; // this is ok
-        let expr2 = "b.a"; // error
-        let target1 = &[Token::Var("a".into()), Token::Dot, Token::Var("b".into())];
+    // TODO move this to parser logic
+    // #[test]
+    // fn test_tokenizer_expr3() {
+    //     let input_var = &["a"];
+    //     let expr1 = "a.b"; // this is ok
+    //     let expr2 = "b.a"; // error
+    //     let target1 = &[Token::Var("a".into()), Token::Dot, Token::Var("b".into())];
 
-        let res1 = tokenize_lines(expr1, input_var).unwrap();
-        let res2 = tokenize_lines(expr2, input_var);
-        assert!(same_tokens(&unwrap_contexts(&res1), target1));
-        assert_matches!(res2, Err(TokenizerError::UndefinedVariable(_, _)));
-    }
+    //     let res1 = tokenize_lines(expr1, input_var).unwrap();
+    //     let res2 = tokenize_lines(expr2, input_var);
+    //     assert!(same_tokens(&unwrap_contexts(&res1), target1));
+    //     assert_matches!(res2, Err(TokenizerError::UndefinedVariable(_, _)));
+    // }
 
     #[test]
     fn test_tokenizer_expr4() {
-        let input_var = &["v"];
         let expr = "v[0:-1]"; // error
         let target = &[Token::Var("v".into()), Token::LB,
             Token::Number(0.0), Token::Colon, Token::Number(-1.0), Token::RB
             ];
 
-        let res = tokenize_lines(expr, input_var).unwrap();
+        let res = tokenize_lines(expr).unwrap();
         assert!(same_tokens(&unwrap_contexts(&res), target));
     }
 
@@ -620,7 +605,7 @@ mod tests {
     #[test]
     fn test_tokenstream1() {
         let expr = "(1 + x) * 3";
-        let ts = TokenStream::new(expr, &vec!["x"]).unwrap();
+        let ts = TokenStream::new(expr).unwrap();
 
         for t in ts.tokens {
             println!("{}", t.token);
