@@ -200,19 +200,17 @@ pub(crate) fn flatten_tree(ast: AST)
             }
         }
 
-    if let Some(tree) = ast.tree {
-        let id = id_gen.get_id();
-        recurse_tree(
-            &tree,
-            &mut values,
-            &mut evaluands,
-            &mut aliases,
-            &mut id_gen,
-            id
-        );
-    } else {
-        // empty expression
-    }
+
+    let id = id_gen.get_id();
+    recurse_tree(
+        &ast.tree,
+        &mut values,
+        &mut evaluands,
+        &mut aliases,
+        &mut id_gen,
+        id
+    );
+
 
     (values, aliases, evaluands)
 }

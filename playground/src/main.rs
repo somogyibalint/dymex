@@ -133,13 +133,13 @@ fn App() -> Element {
                 match AST::new(tokenstream.clone()) {
                     Ok(ast) => {
                         parser_msg.set("✓".to_string());
-                        if let Some(branch) = &ast.tree {
-                            mermaid_script.set(styled_ast_graph(branch, &mmd_style));
-                            latex_tex.set(format!("{}", branch.latex().replace("⋅", " ")));
 
-                            valid_expression.set(true);
-                            evaluator.set(Some(Evaluator::from_ast(ast)));
-                        }
+                        mermaid_script.set(styled_ast_graph(&ast.tree, &mmd_style));
+                        latex_tex.set(format!("{}", &ast.tree.latex().replace("⋅", " ")));
+
+                        valid_expression.set(true);
+                        evaluator.set(Some(Evaluator::from_ast(ast)));
+
                     },
                     Err(err) => {
                         parser_msg.set(err.user_message().full_message(&raw_expression()));

@@ -14,60 +14,48 @@ pub use mermaid::*;
 /// Abstract syntax tree
 #[derive(Clone)]
 pub struct AST {
-    ts: TokenStream,
-    pub tree: Option<Branch>, // TODO does this need to be an option?? what is the use for None?
+    pub tree: Branch, // TODO does this need to be an option?? what is the use for None?
     pub assigned_to: Option<String>
 }
 
 impl AST {
-    pub fn new(ts: TokenStream) -> Result<Self, ParsingError> {
-        let mut instance = Self {ts, tree: None, assigned_to: None };
-        match instance.parse_tokens() {
-            Ok(()) => Ok(instance),
-            Err(err) => Err(err)
-        }
-    }
+    pub fn new(mut ts: TokenStream) -> Result<Self, ParsingError> {
 
-    fn parse_tokens(&mut self) -> Result<(), ParsingError> {
-        if let Err(e) = self.check_parens() {
+        if let Err(e) = Self::check_parens(&ts) {
             return Err(e);
         }
-        if let Err(e) = self.check_tokens() {
+        if let Err(e) = Self::check_tokens(&ts) {
             return Err(e);
         }
-        match parse_tokenstream(&mut self.ts) {
+
+        let tree = match pratt_parser(&mut ts, 0) {
             Err(e) => return Err(e),
-            Ok(branch) => self.tree = Some(branch)
-        }
-        // check assignements
-        // check variables
+            Ok(branch) => Some(branch)
+        };
 
-        Ok(())
+        // check assignements
+
+        Ok(AST {
+            // ts: ts,
+            tree: tree.unwrap(),
+            assigned_to: None
+        })
+
     }
 
     pub fn rpn_repr(&self) -> String {
-        match &self.tree {
-            Some(t) => t.as_rpn_str(),
-            None => "".into()
-        }
+        self.tree.as_rpn_str()
     }
 
     pub fn flatten_ast(&self) -> FlatAst {
         let mut ast = FlatAst::new();
-        match &self.tree {
-            None => {
-                panic!("AST is empty!");
-            },
-            Some(branch) => {
-                traverse_ast(branch, &mut ast, 0);
-            }
-        }
+        traverse_ast(&self.tree, &mut ast, 0);
         ast
     }
 
-    fn check_parens(&self) -> Result<(), ParsingError> {
+    fn check_parens(ts: &TokenStream) -> Result<(), ParsingError> {
         let mut n: i32 = 0;
-        for tc in self.ts.tokens() {
+        for tc in ts.tokens() {
             let token = &tc.token;
             match token {
                 Token::LP => n += 1,
@@ -82,20 +70,8 @@ impl AST {
         }
     }
 
-    // fn check_assigment(&mut self) -> Result<(), ParsingError> {
-    //     if let Some(tree) = &self.tree {
-    //         match tree {
-    //             Branch::Atom(tc) => {
-
-    //             }
-    //             Branch::Expression(tc, children )
-    //         }
-    //     }
-    //     Ok(())
-    // }
-
-    fn check_tokens(&self) -> Result<(), ParsingError> {
-        for tc in self.ts.tokens() {
+    fn check_tokens(ts: &TokenStream) -> Result<(), ParsingError> {
+        for tc in ts.tokens() {
             let token = &tc.token;
             match token {
                 Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
@@ -113,20 +89,32 @@ impl AST {
         Ok(())
     }
 
+    // fn check_assigment(&mut self) -> Result<(), ParsingError> {
+    //     if let Some(tree) = &self.tree {
+    //         match tree {
+    //             Branch::Atom(tc) => {
+
+    //             }
+    //             Branch::Expression(tc, children )
+    //         }
+    //     }
+    //     Ok(())
+    // }
+
     fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
         let variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
-        if let Some(tree) = &self.tree {
-            for t in tree.iter_dfs() {
-                match &t.tc().token {
-                    Token::Var(varname) => {
-                        if !variables.contains(&varname.as_str()) {
-                            return Err(ParsingError::NotImplemented("todo!".to_string()));
-                        }
-                    },
-                    _ => {}
-                }
+
+        for t in self.tree.iter_dfs() {
+            match &t.tc().token {
+                Token::Var(varname) => {
+                    if !variables.contains(&varname.as_str()) {
+                        return Err(ParsingError::NotImplemented("todo!".to_string()));
+                    }
+                },
+                _ => {}
             }
         }
+
         Ok(())
     }
 }
@@ -604,7 +592,7 @@ use crate::*;
     fn test_iter_ast() {
         let expr = "(1 - y)*max(0.0, 4.0, z**2) + x/3";
         let ts = TokenStream::new(expr).unwrap();
-        let tree = AST::new(ts).unwrap().tree.unwrap();
+        let tree = AST::new(ts).unwrap().tree;
 
         // breadth first
         let expected_bfs = vec![

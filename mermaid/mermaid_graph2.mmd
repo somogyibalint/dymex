@@ -1,0 +1,19 @@
+---
+config:
+  layout: elk
+  look: handDrawn
+  theme: light
+---
+flowchart TB
+  expr@{ shape: doc, label: "z = x+y" }
+  var0@{ shape: cyl, label: "x" }
+  var1@{ shape: cyl, label: "y" }
+  S0[" = "]
+  S1( z )
+  S2{" \+ "}
+  S3( x )
+  S4( y )
+  S0-->S1
+  S2-->S3
+  S2-->S4
+  S0-->S2

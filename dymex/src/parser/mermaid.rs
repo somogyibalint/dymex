@@ -123,7 +123,7 @@ impl MermaidGraph {
         let ts = TokenStream::new(&expr).unwrap(); //TODO eliminate this unwrap
         let ast = AST::new(ts).unwrap();
 
-        graph.ast = ast.tree;
+        graph.ast = Some(ast.tree);
         graph
     }
 
