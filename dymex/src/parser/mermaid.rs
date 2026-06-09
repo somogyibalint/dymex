@@ -1,7 +1,7 @@
 use std::{collections::HashMap};
 use crate::Branch;
 use std::fs::File;
-use std::io::{Write, BufWriter};
+use std::io::{Write};
 use crate::{AST, Token, TokenContext, TokenStream};
 
 // TODO Ended up being really clunky, too much cloning, mut ...

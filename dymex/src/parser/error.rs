@@ -1,8 +1,4 @@
-use std::usize;
-
-use itertools::PadUsing;
-
-use crate::{UserMessage};
+use crate::{UserMessage, TokenizerError};
 
 
 /// An error reported by the parser.
@@ -16,7 +12,8 @@ pub enum ParsingError {
     InvalidOperation(usize, String),
     NotImplemented(String),
     UndefinedVariable(String, usize),
-    InvalidAssignment(String, usize)
+    InvalidAssignment(String, usize),
+    LexingError(TokenizerError)
 }
 impl ParsingError {
     pub fn user_message(&self) -> UserMessage {
@@ -66,6 +63,7 @@ impl ParsingError {
                     Some(*i),
                     None,
                     None),
+            Self::LexingError(err) => err.user_message()
         }
     }
 }

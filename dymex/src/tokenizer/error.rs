@@ -40,12 +40,6 @@ impl TokenizerError {
                 Some("Valid formats are: 1, 3.14, 1e-10, 1.23E10, 1E+9, 1_000_000"),
                 None)
             }
-            // Self::UndefinedVariable(i, name) => {
-            //     UserMessage::new(format!("Undefined variable: {}", name),
-            //     Some(*i),
-            //     None,
-            //     None)
-            // }
             Self::InvalidVariableName(varname, hint) => {
                 UserMessage::new(format!("Invalid variable name: {}", varname),
                 None,

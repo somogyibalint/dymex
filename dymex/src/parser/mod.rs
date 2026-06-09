@@ -1,8 +1,8 @@
 /// Turn a stream of tokens into an anstract syntax tree
 
-use std::{collections::{HashMap, VecDeque}, env::var, fmt::Write, marker::PhantomData, ops::ControlFlow::Break, path::Iter, process::Child};
+use std::{collections::{HashMap, VecDeque}, fmt::Write};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Branch::Atom, Token, TokenContext, TokenStream};
+use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
 
 mod latex;
 pub use latex::*;
@@ -12,9 +12,9 @@ mod mermaid;
 pub use mermaid::*;
 
 /// Abstract syntax tree
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AST {
-    pub tree: Branch, // TODO does this need to be an option?? what is the use for None?
+    pub tree: Branch,
     pub assigned_to: Option<String>
 }
 
@@ -39,6 +39,13 @@ impl AST {
         };
 
         ast.check_assigment()
+    }
+
+    pub fn from_expression(expr: &str) -> Result<Self, ParsingError> {
+        match TokenStream::new(expr) {
+            Ok(ts) => Self::new(ts),
+            Err(e) => Err(ParsingError::LexingError(e))
+        }
     }
 
     pub fn rpn_repr(&self) -> String {
@@ -72,9 +79,9 @@ impl AST {
         for tc in ts.tokens() {
             let token = &tc.token;
             match token {
-                Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
-                    return Err(ParsingError::InvalidOperation(tc.at, "Only simple assignment is implemented.".into()));
-                }
+                // Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
+                //     return Err(ParsingError::InvalidOperation(tc.at, "Only simple assignment is implemented.".into()));
+                // }
                 Token::LogicOp(_) => {
                     return Err(ParsingError::InvalidOperation(tc.at, "Logical operators are not implemented.".into()));
                 }
@@ -118,7 +125,8 @@ impl AST {
         // Check for deeper assignements
         for branch in self.tree.iter_dfs() {
             if let Branch::Expression(tc, _ ) = branch
-            && let Token::AssignOp(_) = tc.token {
+            && let Token::AssignOp(assignment) = &tc.token
+            && let AssignmentOperator::Assign = assignment {
                 return Err(ParsingError::InvalidAssignment("Only top level assignement is supported".to_string(), tc.at));
             }
         }
@@ -610,6 +618,46 @@ use crate::*;
         test_parsing("x.r - x0", &vec!["r", "x0"], "(-: (.: r, x), x0)");
     }
 
+    #[test]
+    fn test_assignment_ok() {
+        let ast = AST::from_expression("x = 1 + 2*y").unwrap();
+        assert_matches!(ast.check_input_vars(&["y"]), Ok(()));
+        assert_matches!(ast.check_input_vars(&["x"]), Err(_));
+        assert_eq!(ast.assigned_to, Some("x".to_string()));
+        if let Branch::Expression(tc, children) = ast.tree {
+            assert_matches!(tc.token, Token::ArOp(ArithmeticOperator::Plus));
+            assert_matches!(children.len(), 2);
+        } else {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn test_assignment_fail() {
+        let ast = AST::from_expression("3 * x = y");
+        assert_matches!(ast, Err(ParsingError::InvalidAssignment(_, _)));
+
+        let ast = AST::from_expression("x = y = 3");
+        assert_matches!(ast, Err(ParsingError::InvalidAssignment(_, _)));
+
+        let ast = AST::from_expression("x + 2*(1 + max(3, y = 2))");
+        assert_matches!(ast, Err(ParsingError::InvalidAssignment(_, _)));
+    }
+
+    #[test]
+    fn test_arithmetic_assignment() {
+        let ast = AST::from_expression("x += 1");
+        if let Ok(ast) = &ast {
+            assert_matches!(ast.check_input_vars(&["x"]), Ok(()));
+            assert_matches!(ast.check_input_vars(&["t"]), Err(_));
+            assert_eq!(ast.assigned_to, None);
+            if let Branch::Expression(tc, _) = &ast.tree {
+                assert_matches!(tc.token, Token::AssignOp(AssignmentOperator::PlusEq));
+                return;
+            }
+        }
+        panic!()
+    }
 
     #[test]
     fn test_flattened_ast() {
