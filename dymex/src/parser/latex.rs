@@ -77,6 +77,7 @@ impl Latex for Token {
                 Function::Exp => "#", // special case
             }.to_string(),
             Self::Var(s) => format_var_name(s),
+            Self::Attr(a) => a.to_string(),
             Self::Newline => "".to_string(), // ! is this OK?
             Self::Eof => "".to_string(),
             Self::Number(x) => format!("{}", x),

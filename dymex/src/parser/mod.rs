@@ -33,14 +33,12 @@ impl AST {
             Ok(branch) => Some(branch)
         };
 
-        // check assignements
-
-        Ok(AST {
-            // ts: ts,
+        let ast = AST {
             tree: tree.unwrap(),
             assigned_to: None
-        })
+        };
 
+        ast.check_assigment()
     }
 
     pub fn rpn_repr(&self) -> String {
@@ -89,26 +87,51 @@ impl AST {
         Ok(())
     }
 
-    // fn check_assigment(&mut self) -> Result<(), ParsingError> {
-    //     if let Some(tree) = &self.tree {
-    //         match tree {
-    //             Branch::Atom(tc) => {
+    fn check_assigment(mut self) -> Result<Self, ParsingError> {
+        // Check for top level assignement, and transform self accordingly
+        //    Self {tree: `varname = expression`, assigned_to = None}
+        //        to
+        //    Self {tree: `expression`, assigned_to = Some(varname)}
+        match &self.tree {
+            Branch::Atom(_) => {},
+            Branch::Expression(tc, children ) => {
+                match &tc.token {
+                    Token::AssignOp(op) if *op == AssignmentOperator::Assign => {
+                        match (children.get(0), children.get(1), children.get(2)) {
+                            (Some(lhs), Some(rhs), None) => {
+                                let assigned_to = if let Branch::Atom(lhs) = lhs
+                                    && let Token::Var(varname) = &lhs.token {
+                                        varname
+                                } else {
+                                    return Err(ParsingError::InvalidAssignment("Only assignement to variables is supported".to_string(), tc.at));
+                                };
+                                self.assigned_to = Some(assigned_to.clone());
+                                self.tree = rhs.clone(); // unnecessary clone, non-trivial to circumvent
+                            },
+                            _ => panic!("Assignement should have exactly two arguments, found instead {}", children.len())
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Check for deeper assignements
+        for branch in self.tree.iter_dfs() {
+            if let Branch::Expression(tc, _ ) = branch
+            && let Token::AssignOp(_) = tc.token {
+                return Err(ParsingError::InvalidAssignment("Only top level assignement is supported".to_string(), tc.at));
+            }
+        }
+        Ok(self)
+    }
 
-    //             }
-    //             Branch::Expression(tc, children )
-    //         }
-    //     }
-    //     Ok(())
-    // }
-
-    fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
+    pub fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
         let variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
-
         for t in self.tree.iter_dfs() {
             match &t.tc().token {
                 Token::Var(varname) => {
                     if !variables.contains(&varname.as_str()) {
-                        return Err(ParsingError::NotImplemented("todo!".to_string()));
+                        return Err(ParsingError::UndefinedVariable(varname.clone(), t.tc().at));
                     }
                 },
                 _ => {}
@@ -228,7 +251,6 @@ impl Branch {
     {
         BFSBranchIter::new(self)
     }
-
 }
 
 
@@ -296,7 +318,7 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
 
     let mut lhs = match next.token {
         // atom -> move to loop
-        Token::Var(_) | Token::Const(_) | Token::Number(_) => {
+        Token::Var(_) | Token::Const(_) | Token::Number(_) | Token::Attr(_) => {
             Branch::Atom(next.clone())
         }
         // (    -> recursion
@@ -503,17 +525,22 @@ fn traverse_ast(branch: &Branch, ast: &mut FlatAst, parent: u8) {
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches;
+    use std::{assert_matches};
 
 use crate::*;
     use super::Branch;
 
-    fn test_parsing(expr: &str, var: &[&str], rpn: &str) {
+    fn test_parsing(expr: &str, input_variables: &[&str], rpn: &str) {
         let ts = TokenStream::new(expr).unwrap();
-        match AST::new(ts) {
+        let ast = AST::new(ts);
+        match ast {
             Err(err) => panic!("Parsing failed: {:?}", err),
             Ok(ast) => {
                 assert_eq!(ast.rpn_repr(), rpn);
+                match ast.check_input_vars(input_variables) {
+                    Ok(()) => {},
+                    Err(err) => panic!("Parsing failed: {:?}", err),
+                }
             }
         }
     }
@@ -578,11 +605,19 @@ use crate::*;
     }
 
     #[test]
+    #[should_panic]
+    fn test_get_field2() {
+        test_parsing("x.r - x0", &vec!["r", "x0"], "(-: (.: r, x), x0)");
+    }
+
+
+    #[test]
     fn test_flattened_ast() {
         let expr = "x + max(0, sqrt(min(1,2,3,4)))";
         let var =  &vec!["x"];
         let ts = TokenStream::new(expr).unwrap();
         let ast = AST::new(ts).unwrap();
+        ast.check_input_vars(var).unwrap();
         let flat_ast = ast.flatten_ast();
         println!("Expression: {}", expr);
         flat_ast.print_ast();
@@ -637,7 +672,7 @@ use crate::*;
     }
 
     #[test]
-    fn test_check_input_vars() {
+    fn test_udefined_variables() {
         let expr = "x + 2*y";
         let ts = TokenStream::new(expr).unwrap();
         let ast = AST::new(ts).unwrap();
@@ -645,9 +680,8 @@ use crate::*;
         let result_fail = ast.check_input_vars(&["x"]);
 
         assert_matches!(result_ok,  Ok(()));
-        assert_matches!(result_fail, Err(ParsingError::NotImplemented(_))); // TODO
+        assert_matches!(result_fail, Err(ParsingError::UndefinedVariable(_, 6))); // TODO
     }
-
 
 
 }

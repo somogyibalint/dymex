@@ -24,6 +24,7 @@ pub enum Token {
     Number(Float),
     Const(Constant),
     Var(String),
+    Attr(String),
     Func(Function, usize),
     Newline,
     Eof
@@ -47,6 +48,7 @@ impl fmt::Display for Token {
             Token::Number(x) => write!(f, "{}", x),
             Token::Const(c) => write!(f, "{}", c),
             Token::Var(s) => write!(f, "{}", s),
+            Token::Attr(s) => write!(f, "{}", s),
             Token::Func(func, _) => write!(f, "{}", func),
             Token::Newline => write!(f, "⏎"),
             Token::Eof => write!(f, "Eof"),

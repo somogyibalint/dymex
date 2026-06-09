@@ -14,7 +14,7 @@ pub enum TokenizerError {
     SyntaxError(usize),
     InvalidCharacter(char, usize),
     InvalidNumberFormat(usize),
-    UndefinedVariable(usize, String),
+    // UndefinedVariable(usize, String),
     InvalidVariableName(String, &'static str),
 }
 impl TokenizerError {
@@ -40,12 +40,12 @@ impl TokenizerError {
                 Some("Valid formats are: 1, 3.14, 1e-10, 1.23E10, 1E+9, 1_000_000"),
                 None)
             }
-            Self::UndefinedVariable(i, name) => {
-                UserMessage::new(format!("Undefined variable: {}", name),
-                Some(*i),
-                None,
-                None)
-            }
+            // Self::UndefinedVariable(i, name) => {
+            //     UserMessage::new(format!("Undefined variable: {}", name),
+            //     Some(*i),
+            //     None,
+            //     None)
+            // }
             Self::InvalidVariableName(varname, hint) => {
                 UserMessage::new(format!("Invalid variable name: {}", varname),
                 None,
