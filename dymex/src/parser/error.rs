@@ -1,5 +1,9 @@
 use crate::{UserMessage, TokenizerError};
 
+const VARNAME_EXAMPLES: &str = "Valid: a, ϕ0, _mass, phase_x_2_, e0_π2, ...\n Invalid: π, e, 1a, 1_b, ... ";
+pub(super) const VARNAME_ERR1: &str = "This is a reserved keyword, please choose a different name!";
+pub(super) const VARNAME_ERR2: &str = "Variable names may contain `_`, numbers or alphabetic characters.";
+pub(super) const VARNAME_ERR3: &str = "Variable names cannot start with a number.";
 
 /// An error reported by the parser.
 #[derive(Debug, Clone, PartialEq)]
@@ -12,6 +16,7 @@ pub enum ParsingError {
     InvalidOperation(usize, String),
     NotImplemented(String),
     UndefinedVariable(String, usize),
+    InvalidVariableName(String,  &'static str),
     InvalidAssignment(String, usize),
     LexingError(TokenizerError)
 }
@@ -58,6 +63,12 @@ impl ParsingError {
                     Some(*i),
                     None,
                     None),
+            Self::InvalidVariableName(varname, hint) => {
+                UserMessage::new(format!("Invalid variable name: {}", varname),
+                None,
+                Some(hint),
+                Some(VARNAME_EXAMPLES))
+            }
             Self::InvalidAssignment(details, i) => UserMessage::new(
                     format!("Invalid assignment: `{}`", details),
                     Some(*i),

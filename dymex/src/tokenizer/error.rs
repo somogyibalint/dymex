@@ -4,7 +4,6 @@ use crate::UserMessage;
 pub(super) const VARNAME_ERR1: &str = "This is a reserved keyword, please choose a different name!";
 pub(super) const VARNAME_ERR2: &str = "Variable names may contain `_`, numbers or alphabetic characters.";
 pub(super) const VARNAME_ERR3: &str = "Variable names cannot start with a number.";
-const VARNAME_EXAMPLES: &str = "Valid: a, ϕ0, _mass, phase_x_2_, e0_π2, ...\n Invalid: π, e, 1a, 1_b, ... ";
 
 
 /// An error reported by the parser.
@@ -15,7 +14,7 @@ pub enum TokenizerError {
     InvalidCharacter(char, usize),
     InvalidNumberFormat(usize),
     // UndefinedVariable(usize, String),
-    InvalidVariableName(String, &'static str),
+    // InvalidVariableName(String, &'static str),
 }
 impl TokenizerError {
     pub fn user_message(&self) -> UserMessage {
@@ -39,12 +38,6 @@ impl TokenizerError {
                 Some(*i),
                 Some("Valid formats are: 1, 3.14, 1e-10, 1.23E10, 1E+9, 1_000_000"),
                 None)
-            }
-            Self::InvalidVariableName(varname, hint) => {
-                UserMessage::new(format!("Invalid variable name: {}", varname),
-                None,
-                Some(*hint),
-                Some(VARNAME_EXAMPLES))
             }
         }
     }

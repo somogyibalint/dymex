@@ -1,15 +1,18 @@
 /// Turn a stream of tokens into an anstract syntax tree
 
-use std::{collections::{HashMap, VecDeque}, fmt::Write};
+use std::{clone, collections::{HashMap, VecDeque}, fmt::Write};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream};
-
+use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, TokenizedLines, is_ident_char};
+use error::{VARNAME_ERR1, VARNAME_ERR2, VARNAME_ERR3};
 mod latex;
 pub use latex::*;
 mod error;
 pub use error::ParsingError;
 mod mermaid;
 pub use mermaid::*;
+
+const RESERVED_IDS: [&str; 19] = ["min", "max", "avg", "mean", "std", "sin", "cos", "abs",
+"tan", "cotan", "exp", "log", "log2", "log10", "sqrt", "pi", "e", "sqrt2", "sqrt3"];
 
 /// Abstract syntax tree
 #[derive(Debug, Clone)]
@@ -79,6 +82,7 @@ impl AST {
         for tc in ts.tokens() {
             let token = &tc.token;
             match token {
+                // TODO: config maybe
                 // Token::AssignOp(x) if *x != AssignmentOperator::Assign => {
                 //     return Err(ParsingError::InvalidOperation(tc.at, "Only simple assignment is implemented.".into()));
                 // }
@@ -96,9 +100,9 @@ impl AST {
 
     fn check_assigment(mut self) -> Result<Self, ParsingError> {
         // Check for top level assignement, and transform self accordingly
-        //    Self {tree: `varname = expression`, assigned_to = None}
-        //        to
-        //    Self {tree: `expression`, assigned_to = Some(varname)}
+        //     Self {tree: `varname = expression`, assigned_to = None}
+        //                         ⇓  ⇓  ⇓
+        //     Self {tree: `expression`, assigned_to = Some(varname)}
         match &self.tree {
             Branch::Atom(_) => {},
             Branch::Expression(tc, children ) => {
@@ -133,8 +137,12 @@ impl AST {
         Ok(self)
     }
 
+    ///
     pub fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
         let variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
+        if let Err(err) = check_for_invalid_inputs(&variables) {
+            return Err(err);
+        }
         for t in self.tree.iter_dfs() {
             match &t.tc().token {
                 Token::Var(varname) => {
@@ -145,34 +153,52 @@ impl AST {
                 _ => {}
             }
         }
-
         Ok(())
     }
 }
 
 
 /// Abstract syntax tree series
-// #[derive(Clone)]
-// pub struct ASTSeries {
-//     ts: TokenStream,
-//     pub tree: Vec<Branch>
-// }
+#[derive(Clone)]
+pub struct ASTSeries {
+    forest: Vec<AST>
+}
 
-// impl ASTSeries {
-//     pub fn new(ts: TokenStream) -> Result<Self, ParsingError> {
-//         let mut instance = Self {ts, tree: Vec::new() };
-//         match instance.parse_tokens() {
-//                 Ok(()) => Ok(instance),
-//                 Err(err) => Err(err)
-//         }
-//     }
+impl ASTSeries {
+    // TODO unify contructor api with AST
+    pub fn new(multi_line_expr: &str) -> Result<Self, ParsingError> {
+        let tss = TokenizedLines::new(multi_line_expr);
+        match tss {
+            Err(err) => Err(ParsingError::LexingError(err)),
+            Ok(tss) => {
+                let mut parsed_expr = Vec::new();
+                for ts in tss.lines() {
+                    match AST::new(ts.clone()) {
+                        Err(err) => return Err(err),
+                        Ok(ast) => parsed_expr.push(ast),
+                    };
+                }
+                Ok(Self{forest: parsed_expr})
+            }
+        }
+    }
 
-//     fn parse_tokens(&mut self) -> Result<(), ParsingError> {
-//         for line in self.ts.lines() {
-
-//         }
-//     }
-// }
+    pub fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
+        let mut variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
+        for ast in &self.forest {
+            if let Err(err) =  ast.check_input_vars(&variables) {
+                return  Err(err);
+            }
+            if let Some(tmp_var) = &ast.assigned_to {
+                variables.push(&tmp_var);
+            }
+        }
+        Ok(())
+    }
+    pub fn forest(&self) -> &[AST] {
+        &self.forest
+    }
+}
 
 
 /// Resursive data structure for the AST
@@ -478,6 +504,22 @@ fn is_atom(t: & Token) -> bool {
     }
 }
 
+/// Check if there is an input variable with a name that collides with reserved words.
+fn check_for_invalid_inputs(variables: &[&str]) -> Result<(), ParsingError> {
+    for var_name in variables {
+        if RESERVED_IDS.contains(var_name) {
+            return Err(ParsingError::InvalidVariableName((*var_name).into(), VARNAME_ERR1));
+        }
+        if !var_name.chars().all(|x| is_ident_char(x) ) {
+            return Err(ParsingError::InvalidVariableName((*var_name).into(), VARNAME_ERR2));
+        }
+        let first = var_name.chars().next().unwrap();
+        if first.is_ascii_digit() {
+            return Err(ParsingError::InvalidVariableName((*var_name).into(), VARNAME_ERR3));
+        }
+    }
+    Ok(())
+}
 
 /// Non-recursive representation of the AST
 ///
@@ -534,13 +576,13 @@ fn traverse_ast(branch: &Branch, ast: &mut FlatAst, parent: u8) {
 #[cfg(test)]
 mod tests {
     use std::{assert_matches};
-
-use crate::*;
+    use super::error::{VARNAME_ERR1, VARNAME_ERR2, VARNAME_ERR3};
+    use super::check_for_invalid_inputs;
+    use crate::*;
     use super::Branch;
 
     fn test_parsing(expr: &str, input_variables: &[&str], rpn: &str) {
-        let ts = TokenStream::new(expr).unwrap();
-        let ast = AST::new(ts);
+        let ast = AST::from_expression(expr);
         match ast {
             Err(err) => panic!("Parsing failed: {:?}", err),
             Ok(ast) => {
@@ -605,6 +647,12 @@ use crate::*;
     #[test]
     fn test_indexing() {
         test_parsing("v[1:-1]", &vec!["v"], "([: v, (:: 1, -1))");
+
+        // let expr_list = ["v[1]", "v[0,0]", "v[0:10]", "v[0:10:-1]",  "v[:-1]",  "v[max(0, i):-1]"];
+        // for expr in expr_list {
+        //     let rpn = AST::from_expression(expr).unwrap().rpn_repr();
+        //     println!("  >> {expr} => {rpn}")
+        // }
     }
 
     #[test]
@@ -657,6 +705,17 @@ use crate::*;
             }
         }
         panic!()
+        // assignment:
+        // let id1 = &charslice("new_var == 1 + center");
+        // let res1 = parse_identifier(id1, start, &mut input_vars, None);
+        // let id2 = &charslice("new_var = 1 + center");
+        // let res2 = parse_identifier(id2, start, &mut input_vars, None);
+        // let id3 = &charslice("new_var + center");
+        // let res3 = parse_identifier(id3, start, &mut input_vars, None);
+        // assert_eq!(res1, Err(TokenizerError::UndefinedVariable(start, "new_var".to_string())));
+        // assert_eq!(res2, Ok((Token::Var("new_var".into()), 7)));
+        // assert_eq!(res3, Ok((Token::Var("new_var".into()), 7)));
+
     }
 
     #[test]
@@ -731,5 +790,25 @@ use crate::*;
         assert_matches!(result_fail, Err(ParsingError::UndefinedVariable(_, 6))); // TODO
     }
 
+    #[test]
+    fn test_multi_line_var() {
+        let expr = "t = 2*x + y\nu = (t - 1.0) / x\n max(t,u,x*y)";
+        let good_inputs = ["x", "y"];
+        let missing_inputs = ["x", "w"];
+        let ast = ASTSeries::new(expr).unwrap();
+        assert_matches!(ast.check_input_vars(&good_inputs), Ok(_));
+        assert_matches!(ast.check_input_vars(&missing_inputs), Err(_));
+        let assigned_to : Vec<String> = ast.forest().iter().map(|ast| ast.assigned_to.clone()).flatten().collect();
+        assert_eq!(&assigned_to, &["t".to_string(), "u".to_string()])
+    }
+
+    #[test]
+    fn test_invalid_names() {
+        assert_eq!(check_for_invalid_inputs(&["pi"]), Err(ParsingError::InvalidVariableName("pi".into(), VARNAME_ERR1)));
+        assert_eq!(check_for_invalid_inputs(&["ip"]), Ok(()));
+        assert_eq!(check_for_invalid_inputs(&["2pi"]), Err(ParsingError::InvalidVariableName("2pi".into(), VARNAME_ERR3)));
+        assert_eq!(check_for_invalid_inputs(&["_2pi"]), Ok(()));
+        assert_eq!(check_for_invalid_inputs(&["pi*2"]), Err(ParsingError::InvalidVariableName("pi*2".into(), VARNAME_ERR2)));
+    }
 
 }
