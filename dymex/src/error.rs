@@ -6,7 +6,6 @@ use crate::{ParsingError, TokenizerError};
 pub enum DymexError {
     LexicalError(TokenizerError),
     ParsingError(ParsingError),
-
 }
 impl DymexError {
     fn user_message(&self) -> UserMessage {
@@ -16,6 +15,20 @@ impl DymexError {
         }
     }
 }
+impl From<TokenizerError> for DymexError {
+    fn from(err: TokenizerError) -> Self {
+        DymexError::LexicalError(err)
+    }
+}
+impl From<ParsingError> for DymexError {
+    fn from(err: ParsingError) -> Self {
+        match err {
+            ParsingError::LexingError(err) => DymexError::LexicalError(err),
+            _ => DymexError::ParsingError(err)
+        }
+    }
+}
+
 
 pub struct UserMessage {
     msg: String,
@@ -24,7 +37,7 @@ pub struct UserMessage {
     examples: Option<&'static str>
 }
 impl UserMessage {
-    pub fn new(message: impl Into<String>, 
+    pub fn new(message: impl Into<String>,
         cursor: Option<usize>,
         hint: Option<&'static str>,
         examples: Option<&'static str>,

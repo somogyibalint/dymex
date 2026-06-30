@@ -1,6 +1,6 @@
 /// Turn a stream of tokens into an anstract syntax tree
 
-use std::{clone, collections::{HashMap, VecDeque}, fmt::Write};
+use std::{collections::{HashMap, VecDeque}, fmt::Write};
 use colored::{Colorize, Color};
 use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, TokenizedLines, is_ident_char};
 use error::{VARNAME_ERR1, VARNAME_ERR2, VARNAME_ERR3};

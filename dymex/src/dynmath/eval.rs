@@ -1,19 +1,17 @@
 
 use std::{collections::HashMap, collections::hash_map::Iter};
 use std::rc::Rc;
-// use crate::parser::{A};
 use crate::*;
 
 #[derive(Clone)]
 pub struct Evaluator {
     values: HashMap<u16, Rc<dyn DynMath>>,
     expressions: HashMap<u16, Evaluand>,
-    aliases: HashMap<String, u16>
+    aliases: HashMap<String, u16>,
+    assigned_to: Option<String>
 }
 
 
-//CONSIDER Is a self.update(...) method varranted? Or are we OK creating a new
-// Evaluator every time the expression or variables change?
 impl Evaluator {
     pub fn new(expression: &str, variables: &[&str]) -> Result<Self, DymexError> {
         let ts = match TokenStream::new(expression) {
@@ -22,16 +20,22 @@ impl Evaluator {
         };
         match AST::new(ts) {
             Err(err) => Err(DymexError::ParsingError(err)),
-            Ok(ast) => Ok(Self::from_ast(ast))
+            Ok(ast) => {
+                match ast.check_input_vars(variables) {
+                    Ok(()) => Ok(Self::from_ast(&ast)),
+                    Err(err) => Err(DymexError::ParsingError(err))
+                }
+            }
         }
     }
 
-    pub fn from_ast(ast: AST) -> Self {
-        let (val, aliases, expr) = flatten_tree(ast);
+    pub fn from_ast(ast: &AST) -> Self {
+        let (val, aliases, expr) = flatten_tree(&ast);
         Self {
             values: val,
             expressions: expr,
-            aliases: aliases
+            aliases: aliases,
+            assigned_to: ast.assigned_to.clone()
         }
     }
 
@@ -70,7 +74,10 @@ impl Evaluator {
         }
 
         panic!("ERROR: end of evaluation chain")
-        // Ok(self.values[final_result_id].clone())
+    }
+
+    pub fn assigned_to(&self) -> Option<String> {
+        self.assigned_to.clone()
     }
 }
 
@@ -121,8 +128,9 @@ impl IdGenerator {
     }
 }
 
-
-pub(crate) fn flatten_tree(ast: AST)
+/// Transform the recursive AST in to a graph representation where the nodes
+/// and vertices are stored in HashMaps.
+pub(crate) fn flatten_tree(ast: &AST)
     -> (HashMap<u16, Rc<dyn DynMath>>,
         HashMap<String, u16>,
         HashMap<u16, Evaluand>) {

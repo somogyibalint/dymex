@@ -52,8 +52,6 @@ mod eval;
 use eval::*;
 
 
-
-
 // #[cfg(feature = "playground")]
 fn main() {
     dioxus::launch(App);
@@ -74,9 +72,6 @@ fn App() -> Element {
             ("mmdFunc".to_string(), "stroke:#97522c,stroke-width:4px".to_string()),
         ])
     };
-
-    //let mut tokenstream =  TokenStream::empty(); // ! TODO remove this, delete ::empty() api
-    // let mut evaluator =  EvaluatorAdapter::new();
 
     let raw_expression = use_signal(|| START_EXPR.to_string());
     let variables : IndexMap<String, VarData> = START_VAR
@@ -138,7 +133,7 @@ fn App() -> Element {
                         latex_tex.set(format!("{}", &ast.tree.latex().replace("⋅", " ")));
 
                         valid_expression.set(true);
-                        evaluator.set(Some(Evaluator::from_ast(ast)));
+                        evaluator.set(Some(Evaluator::from_ast(&ast)));
 
                     },
                     Err(err) => {

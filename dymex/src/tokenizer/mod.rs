@@ -415,7 +415,7 @@ pub(super) fn charslice(s: &str) -> Vec<char> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Branch::Expression, TokenizerError};
+    use crate::TokenizerError;
     use super::*;
     use std::assert_matches;
 
