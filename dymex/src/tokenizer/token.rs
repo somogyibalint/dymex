@@ -26,6 +26,7 @@ pub enum Token {
     Var(String),
     Attr(String),
     Func(Function, usize),
+    Method(Method),
     Newline,
     Eof
 }
@@ -50,6 +51,7 @@ impl fmt::Display for Token {
             Token::Var(s) => write!(f, "{}", s),
             Token::Attr(s) => write!(f, "{}", s),
             Token::Func(func, _) => write!(f, "{}", func),
+            Token::Method(method) => write!(f, "{}", method),
             Token::Newline => write!(f, "⏎"),
             Token::Eof => write!(f, "Eof"),
         }
@@ -158,6 +160,16 @@ pub enum Function {
     Sqrt,
 }
 impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", *self)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Method {
+    TakeSlice,
+}
+impl fmt::Display for Method {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", *self)
     }

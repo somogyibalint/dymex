@@ -1,4 +1,6 @@
-use crate::{UserMessage, TokenizerError};
+use std::usize;
+
+use crate::{UserMessage, TokenizerError, TokenContext};
 
 const VARNAME_EXAMPLES: &str = "Valid: a, ϕ0, _mass, phase_x_2_, e0_π2, ...\n Invalid: π, e, 1a, 1_b, ... ";
 pub(super) const VARNAME_ERR1: &str = "This is a reserved keyword, please choose a different name!";
@@ -8,7 +10,7 @@ pub(super) const VARNAME_ERR3: &str = "Variable names cannot start with a number
 /// An error reported by the parser.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsingError {
-    UnexpectedToken(usize),
+    UnexpectedToken(TokenContext, usize),
     UnexpectedLP(usize),
     MissingRP(i32),
     MissingArgument(usize),
@@ -23,9 +25,9 @@ pub enum ParsingError {
 impl ParsingError {
     pub fn user_message(&self) -> UserMessage {
         match self {
-            Self::UnexpectedToken(i) => UserMessage::new(
-                    format!("Unexpected token:"),
-                    Some(*i),
+            Self::UnexpectedToken(tc, tmp) => UserMessage::new(
+                    format!("Unexpected token: {}, {}", tc.token, tmp),
+                    Some(*&tc.at),
                     None,
                     None),
             Self::UnexpectedLP(i) => UserMessage::new(

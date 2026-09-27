@@ -76,6 +76,9 @@ impl Latex for Token {
                 Function::Log10 => r"\log_{10}",
                 Function::Exp => "#", // special case
             }.to_string(),
+            Self::Method(m) => match m {
+                Method::TakeSlice => r"#", // special case
+            }.to_string(),
             Self::Var(s) => format_var_name(s),
             Self::Attr(a) => a.to_string(),
             Self::Newline => "".to_string(), // ! is this OK?

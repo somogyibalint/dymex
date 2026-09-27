@@ -105,13 +105,19 @@ impl TokenStream {
         vars
     }
 
+
+    /// Set tokens with new set of tokens.
+    pub fn set_tokens(&mut self, tokens: Vec<TokenContext>) {
+        self.tokens = tokens.clone();
+        self.tokens_reversed = tokens;
+        self.tokens_reversed.reverse();
+    }
+
     fn tokenize(&mut self) -> Result<(), TokenizerError> {
         let res = tokenize_line(&self.expr);
         match res {
             Ok(v) => {
-                self.tokens = v.clone();
-                self.tokens_reversed = v;
-                self.tokens_reversed.reverse();
+                self.set_tokens(v);
                 Ok(())
             }
             Err(e) => {
@@ -412,6 +418,14 @@ pub(super) fn charslice(s: &str) -> Vec<char> {
     s.chars().collect()
 }
 
+pub(crate) fn same_tokens(tokens1 : &[Token], tokens2 : &[Token]) -> bool {
+    if tokens1.len() != tokens2.len() {return false;}
+    tokens1.iter().zip(tokens2.iter()).filter_map(|(l, r)| if l!=r { Some(l) } else { None }).count() == 0
+}
+
+pub(crate) fn unwrap_contexts(tcs: &[TokenContext]) -> Vec<Token> {
+    tcs.iter().cloned().map(|tc| tc.token ).collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -419,14 +433,7 @@ mod tests {
     use super::*;
     use std::assert_matches;
 
-    fn same_tokens(tokens1 : &[Token], tokens2 : &[Token]) -> bool {
-        if tokens1.len() != tokens2.len() {return false;}
-        tokens1.iter().zip(tokens2.iter()).filter_map(|(l, r)| if l!=r { Some(l) } else { None }).count() == 0
-    }
 
-    fn unwrap_contexts(tcs: &[TokenContext]) -> Vec<Token> {
-        tcs.iter().cloned().map(|tc| tc.token ).collect()
-    }
 
     // TODO: move to err
     #[test]

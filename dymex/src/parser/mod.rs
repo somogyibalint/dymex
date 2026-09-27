@@ -1,8 +1,8 @@
 /// Turn a stream of tokens into an anstract syntax tree
 
-use std::{collections::{HashMap, VecDeque}, fmt::Write};
+use std::{collections::{HashMap, VecDeque}, fmt::Write, iter::Peekable};
 use colored::{Colorize, Color};
-use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, TokenizedLines, is_ident_char};
+use crate::{ArithmeticOperator, AssignmentOperator, Token, TokenContext, TokenStream, TokenizedLines, is_ident_char, Method};
 use error::{VARNAME_ERR1, VARNAME_ERR2, VARNAME_ERR3};
 mod latex;
 pub use latex::*;
@@ -30,7 +30,7 @@ impl AST {
         if let Err(e) = Self::check_tokens(&ts) {
             return Err(e);
         }
-
+        ts = AST::run_pre_parsing_passes(ts);
         let tree = match pratt_parser(&mut ts, 0) {
             Err(e) => return Err(e),
             Ok(branch) => Some(branch)
@@ -137,6 +137,9 @@ impl AST {
         Ok(self)
     }
 
+    fn run_pre_parsing_passes(ts: TokenStream) -> TokenStream {
+        first_indexing_pass(ts)
+    }
     ///
     pub fn check_input_vars<S: AsRef<str>>(&self, inputs: &[S]) -> Result<(), ParsingError> {
         let variables: Vec<&str> = inputs.iter().map(|s| s.as_ref()).collect();
@@ -360,15 +363,16 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
             let res = pratt_parser(ts, 0);
             match res {
                 Ok(lhs) if ts.next().token == Token::RP => lhs,
-                Ok(_) => return Err(ParsingError::MissingRP(1)), // ! FIXME:
+                Ok(_) => return Err(ParsingError::MissingRP(1)), // ! FIXME: location info?
                 Err(e) => return Err(e),
             }
         }
         // found a function
-        Token::Func(_, _) => {
+        Token::Func(_, _) | Token::Method(_)=> {
             let mut args = Vec::<Branch>::new();
-            if ts.next().token != Token::LP {
-                return Err(ParsingError::UnexpectedToken(1))
+            let should_be_lp = ts.next();
+            if should_be_lp.token != Token::LP {
+                return Err(ParsingError::UnexpectedToken(should_be_lp, 10)) // ! missing location info, should be missing LP instead
             }
             loop {
                 let res = pratt_parser(ts, 0);
@@ -380,7 +384,7 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
                 match next.token {
                     Token::RP => { break; },
                     Token::Comma => {},
-                    _ => return Err(ParsingError::UnexpectedToken(next.at))
+                    _ => return Err(ParsingError::UnexpectedToken(next, 11))
                 };
             }
             if args.len() == 0 {
@@ -398,17 +402,18 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
                     Err(err) => return Err(err)
                 }
             } else {
-                return Err(ParsingError::UnexpectedToken(next.at)); // prefix operator that is not + -
+                return Err(ParsingError::UnexpectedToken(next, 12)); // prefix operator that is not + -
             }
         }
     };
 
     loop {
         let peeked = ts.peek();
+        println!("peeked: {:?}", peeked);
         let op = match peeked.token.clone() {
             Token::Eof => break,
             Token::Number(_) | Token::Const(_) | Token::Var(_) =>
-                return Err(ParsingError::UnexpectedToken(peeked.at)),
+                return Err(ParsingError::UnexpectedToken(peeked, 13)),
             t => t,
         };
 
@@ -418,16 +423,19 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
                 break;
             }
             ts.next();
-            lhs = if op == Token::LB {
-                if let Ok(rhs) = pratt_parser(ts, 0) {
-                    assert_eq!(ts.next().token, Token::RB); // TODO: fix error handling
-                    Branch::Expression(peeked, vec![lhs, rhs])
-                } else {
-                    return Err(ParsingError::UnexpectedToken(peeked.at));
-                }
-            } else {
-                Branch::Expression(peeked, vec![lhs])
-            };
+            lhs = Branch::Expression(peeked, vec![lhs]);
+
+            // old indexing parser:
+            // lhs = if op == Token::LB {
+            //     if let Ok(rhs) = pratt_parser(ts, 0) {
+            //         assert_eq!(ts.next().token, Token::RB); // TODO: fix error handling
+            //         Branch::Expression(peeked, vec![lhs, rhs])
+            //     } else {
+            //         return Err(ParsingError::UnexpectedToken(peeked.at));
+            //     }
+            // } else {
+            //     Branch::Expression(peeked, vec![lhs])
+            // };
             continue;
         }
 
@@ -441,7 +449,8 @@ fn pratt_parser(ts: &mut TokenStream, min_precedence: usize) -> Result<Branch, P
             lhs = if let Ok(rhs) = pratt_parser(ts, r_bp) {
                 Branch::Expression(peeked, vec![lhs, rhs])
             } else {
-                return Err(ParsingError::UnexpectedToken(peeked.at));
+                println!(">> : {:?} {:?}", next, peeked);
+                return Err(ParsingError::UnexpectedToken(peeked, 14));
             };
             continue;
         }
@@ -573,11 +582,35 @@ fn traverse_ast(branch: &Branch, ast: &mut FlatAst, parent: u8) {
 }
 
 
+
+// transform indexing brackets to method syntax for easier parsing:
+//   array[ ... ] -> array.index( ... )
+fn first_indexing_pass(mut ts: TokenStream) -> TokenStream {
+    let mut tmp = Vec::new();
+    for tc in ts.tokens() {
+        match tc.token {
+            Token::LB => {
+                tmp.push(TokenContext { token: Token::Dot, at: tc.at, len: 1});
+                tmp.push(TokenContext { token: Token::Method(Method::TakeSlice), at: tc.at, len: tc.len });
+                tmp.push(TokenContext { token: Token::LP, at: tc.at, len: tc.len });
+            },
+            Token::RB => tmp.push(TokenContext { token: Token::RP, at: tc.at, len: tc.len }),
+            _ => tmp.push(tc.clone()),
+        }
+    }
+    ts.set_tokens(tmp);
+    ts
+}
+
+// transform methods from operator structure into simple function structure:
+//   array . index(...)  =>  index(array, ...)
+
 #[cfg(test)]
 mod tests {
     use std::{assert_matches};
     use super::error::{VARNAME_ERR1, VARNAME_ERR2, VARNAME_ERR3};
     use super::check_for_invalid_inputs;
+    use crate::parser::first_indexing_pass;
     use crate::*;
     use super::Branch;
 
@@ -586,6 +619,7 @@ mod tests {
         match ast {
             Err(err) => panic!("Parsing failed: {:?}", err),
             Ok(ast) => {
+                println!("{}", ast.rpn_repr()); //
                 assert_eq!(ast.rpn_repr(), rpn);
                 match ast.check_input_vars(input_variables) {
                     Ok(()) => {},
@@ -644,16 +678,7 @@ mod tests {
         test_parsing("max(0, sqrt(min(1,2,3,4)))", &vec![], "(Max: 0, (Sqrt: (Min: 1, 2, 3, 4)))");
     }
 
-    #[test]
-    fn test_indexing() {
-        test_parsing("v[1:-1]", &vec!["v"], "([: v, (:: 1, -1))");
 
-        // let expr_list = ["v[1]", "v[0,0]", "v[0:10]", "v[0:10:-1]",  "v[:-1]",  "v[max(0, i):-1]"];
-        // for expr in expr_list {
-        //     let rpn = AST::from_expression(expr).unwrap().rpn_repr();
-        //     println!("  >> {expr} => {rpn}")
-        // }
-    }
 
     #[test]
     fn test_get_field() {
@@ -810,5 +835,43 @@ mod tests {
         assert_eq!(check_for_invalid_inputs(&["_2pi"]), Ok(()));
         assert_eq!(check_for_invalid_inputs(&["pi*2"]), Err(ParsingError::InvalidVariableName("pi*2".into(), VARNAME_ERR2)));
     }
+
+    #[test]
+    fn test_indexing_pass() {
+        let ts = TokenStream::new("array[:, 4,  ::-2]").unwrap();
+        let ts = first_indexing_pass(ts);
+        let expected = [
+            Token::Var("array".to_string()),
+            Token::Dot,
+            Token::Method(Method::TakeSlice),
+            Token::LP,
+            Token::Colon,
+            Token::Comma,
+            Token::Number(4f64),
+            Token::Comma,
+            Token::Colon, Token::Colon,
+            Token::Number(-2f64),
+            Token::RP
+        ];
+        assert!(same_tokens(&unwrap_contexts(ts.tokens()), &expected));
+    }
+
+    #[test]
+    fn test_indexing() {
+
+        test_parsing("v[1:-1]", &vec!["v"], "(.: v, (TakeSlice: (:: 1, -1)))");
+
+        let ts = TokenStream::new("v[:, ::-1, 0]").unwrap();
+        let ts = first_indexing_pass(ts);
+        for tc in ts.tokens() {println!("{}", tc.token)}
+
+        test_parsing("v[:, ::-1, 0]", &vec!["v"], "(.: v, (TakeSlice: (:: 1, -1)))");
+        // let expr_list = ["v[1]", "v[0,0]", "v[0:10]", "v[0:10:-1]",  "v[:-1]",  "v[max(0, i):-1]"];
+        // for expr in expr_list {
+        //     let rpn = AST::from_expression(expr).unwrap().rpn_repr();
+        //     println!("  >> {expr} => {rpn}")
+        // }
+    }
+
 
 }
